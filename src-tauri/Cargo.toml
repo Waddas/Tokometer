@@ -12,7 +12,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+# macos-private-api backs the transparent window on macOS (matches macOSPrivateApi in tauri.conf.json).
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
