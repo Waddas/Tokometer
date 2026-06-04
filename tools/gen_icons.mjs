@@ -1,13 +1,20 @@
-// Generates src-tauri/app-icon.png (1024x1024 Clawd pixel art, for `tauri icon`)
-// and the three 64x64 tray icon variants with a status bubble (mirrors the
-// Clawdmeter Windows tray: bubble radius = 1/3 icon radius, bottom-right).
+// One-shot dev tool: generates src-tauri/app-icon.png (1024x1024 Clawd pixel
+// art, for `tauri icon`) and the three 64x64 tray icon variants with a status
+// bubble (bubble radius = 1/3 icon radius, bottom-right). The icons are
+// committed, so you only need this when regenerating them.
 // Pure Node (zlib) PNG encoder — no dependencies.
+//
+//   node tools/gen_icons.mjs <path-to-claudepix-frame.json>
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 
-const SRC = process.argv[2] ?? "D:/Dev/Clawdmeter/tools/claudepix_data/idle_breathe.json";
+const SRC = process.argv[2];
+if (!SRC) {
+  console.error("usage: node tools/gen_icons.mjs <path-to-claudepix-frame.json>");
+  process.exit(1);
+}
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ICONS_DIR = join(ROOT, "src-tauri", "icons");
 mkdirSync(ICONS_DIR, { recursive: true });

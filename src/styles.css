@@ -1,15 +1,18 @@
-/* Clawdmeter theme (firmware theme.h) */
+/* Fonts: open-licensed (SIL OFL 1.1). See src/fonts/. */
 @font-face {
-  font-family: "Styrene";
-  src: url("./fonts/StyreneB-Regular.otf") format("opentype");
+  /* Space Grotesk, instanced at wght=400 and subset to Basic Latin. */
+  font-family: "Grotesk";
+  src: url("./fonts/SpaceGrotesk-Subset.ttf") format("truetype");
 }
 @font-face {
-  font-family: "Tiempos";
-  src: url("./fonts/TiemposText-400-Regular.otf") format("opentype");
+  /* Source Serif 4, instanced at opsz=60/wght=500 and subset to Basic Latin. */
+  font-family: "Serif";
+  src: url("./fonts/SourceSerif4-Subset.ttf") format("truetype");
 }
 @font-face {
-  font-family: "ClawdMono";
-  src: url("./fonts/DejaVuSansMono.ttf") format("truetype");
+  /* Space Mono, subset to Basic Latin + the dashes/middle-dot used in status text. */
+  font-family: "Mono";
+  src: url("./fonts/SpaceMono-Subset.ttf") format("truetype");
 }
 
 :root {
@@ -74,7 +77,8 @@ body {
   left: 0;
   right: 0;
   text-align: center;
-  font: 400 56px/1.1 Tiempos, serif;
+  /* Even, low-contrast display serif (Tiempos-like); weight/opsz baked into the file. */
+  font: 500 56px/1.1 Serif, serif;
   color: var(--text);
 }
 
@@ -97,7 +101,7 @@ body {
   position: absolute;
   top: 12px;
   left: 16px;
-  font: 400 48px/1.1 Styrene, sans-serif;
+  font: 400 48px/1.1 Grotesk, sans-serif;
   color: var(--dim);
 }
 
@@ -105,7 +109,7 @@ body {
   position: absolute;
   top: 13px;
   right: 16px;
-  font: 400 28px/1.1 Styrene, sans-serif;
+  font: 400 28px/1.1 Grotesk, sans-serif;
   color: var(--text);
   background: var(--track);
   border-radius: 999px;
@@ -134,7 +138,7 @@ body {
   position: absolute;
   top: 106px;
   left: 16px;
-  font: 400 28px/1.1 Styrene, sans-serif;
+  font: 400 28px/1.1 Grotesk, sans-serif;
   color: var(--dim);
 }
 
@@ -144,7 +148,7 @@ body {
   left: 0;
   right: 0;
   text-align: center;
-  font: 400 32px/1.1 ClawdMono, monospace;
+  font: 400 32px/1.1 Mono, monospace;
   color: var(--accent);
   white-space: nowrap;
   overflow: hidden;

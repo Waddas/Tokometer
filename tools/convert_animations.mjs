@@ -1,10 +1,17 @@
-// One-shot converter: Clawdmeter claudepix JSON -> src/animations.ts
-// Usage: node tools/convert_animations.mjs [path-to-claudepix_data]
+// One-shot dev tool: converts a directory of claudepix pixel-art JSON files
+// into src/animations.ts. The output is committed, so you only need this when
+// regenerating the artwork.
+//
+//   node tools/convert_animations.mjs <path-to-claudepix-json-dir>
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SRC = process.argv[2] ?? "D:/Dev/Clawdmeter/tools/claudepix_data";
+const SRC = process.argv[2];
+if (!SRC) {
+  console.error("usage: node tools/convert_animations.mjs <path-to-claudepix-json-dir>");
+  process.exit(1);
+}
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "animations.ts");
 
 const anims = [];
