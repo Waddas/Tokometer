@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>clordgauge</title>
+  </head>
+  <body>
+    <div id="root">
+      <div id="scaler">
+        <main id="usage-view">
+          <h1 class="title">Usage</h1>
+          <section class="panel" data-window="session">
+            <div class="pct">--%</div>
+            <div class="pill">Current</div>
+            <div class="bar"><div class="fill"></div></div>
+            <div class="reset">---</div>
+          </section>
+          <section class="panel" data-window="weekly">
+            <div class="pct">--%</div>
+            <div class="pill">Weekly</div>
+            <div class="bar"><div class="fill"></div></div>
+            <div class="reset">---</div>
+          </section>
+          <div id="status-line"><span id="spinner">·</span>&#8202;<span id="status-msg">Connecting…</span></div>
+        </main>
+        <canvas id="splash-view" width="480" height="480" hidden></canvas>
+      </div>
+      <div id="controls">
+        <button id="btn-pin" title="Pin on top">&#9737;</button>
+        <button id="btn-refresh" title="Refresh now">&#8635;</button>
+        <button id="btn-hide" title="Hide (restore from tray)">&#215;</button>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

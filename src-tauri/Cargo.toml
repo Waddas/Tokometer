@@ -1,0 +1,22 @@
+[package]
+name = "clordgauge"
+version = "0.1.0"
+description = "Claude Code usage tray widget (Clawdmeter on the desktop)"
+edition = "2021"
+
+[lib]
+name = "clordgauge_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# native-tls (schannel) so corporate root CAs in the Windows cert store work
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
+tokio = { version = "1", features = ["time", "sync"] }

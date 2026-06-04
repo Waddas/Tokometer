@@ -1,0 +1,193 @@
+/* Clawdmeter theme (firmware theme.h) */
+@font-face {
+  font-family: "Styrene";
+  src: url("./fonts/StyreneB-Regular.otf") format("opentype");
+}
+@font-face {
+  font-family: "Tiempos";
+  src: url("./fonts/TiemposText-400-Regular.otf") format("opentype");
+}
+@font-face {
+  font-family: "ClawdMono";
+  src: url("./fonts/DejaVuSansMono.ttf") format("truetype");
+}
+
+:root {
+  --bg: #000000;
+  --panel: #1f1f1e;
+  --text: #faf9f5;
+  --dim: #b0aea5;
+  --accent: #d97757;
+  --green: #788c5d;
+  --amber: #d97757;
+  --red: #c0392b;
+  --track: #2a2a28;
+  --scale: 0.6667; /* window-width / 480, set from JS */
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+html,
+body {
+  background: transparent;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Everything inside renders in Clawdmeter's 480x480 design space, scaled to fit. */
+#scaler {
+  width: 480px;
+  height: 480px;
+  transform: scale(var(--scale));
+  transform-origin: top left;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* ---- usage screen (geometry from firmware ui.cpp, 480x480 layout) ---- */
+#usage-view {
+  position: absolute;
+  inset: 0;
+}
+
+.title {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 400 56px/1.1 Tiempos, serif;
+  color: var(--text);
+}
+
+.panel {
+  position: absolute;
+  left: 20px;
+  width: 440px;
+  height: 150px;
+  background: var(--panel);
+  border-radius: 8px;
+}
+.panel[data-window="session"] {
+  top: 100px;
+}
+.panel[data-window="weekly"] {
+  top: 266px;
+}
+
+.pct {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  font: 400 48px/1.1 Styrene, sans-serif;
+  color: var(--dim);
+}
+
+.pill {
+  position: absolute;
+  top: 13px;
+  right: 16px;
+  font: 400 28px/1.1 Styrene, sans-serif;
+  color: var(--text);
+  background: var(--track);
+  border-radius: 999px;
+  padding: 6px 18px;
+}
+
+.bar {
+  position: absolute;
+  top: 68px;
+  left: 16px;
+  width: 408px;
+  height: 24px;
+  background: var(--track);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  width: 0%;
+  background: var(--green);
+  border-radius: 6px;
+  transition: width 0.4s ease;
+}
+
+.reset {
+  position: absolute;
+  top: 106px;
+  left: 16px;
+  font: 400 28px/1.1 Styrene, sans-serif;
+  color: var(--dim);
+}
+
+#status-line {
+  position: absolute;
+  bottom: 15px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 400 32px/1.1 ClawdMono, monospace;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 10px;
+}
+
+/* ---- splash ---- */
+#splash-view {
+  position: absolute;
+  inset: 0;
+  image-rendering: pixelated;
+}
+
+/* ---- hover controls (real pixels, not design space) ---- */
+#controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+}
+#root:hover #controls {
+  opacity: 1;
+}
+#controls button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(31, 31, 30, 0.85);
+  color: var(--dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+#controls button:hover {
+  background: var(--track);
+  color: var(--text);
+}
+#btn-pin.pinned {
+  color: var(--accent);
+}
