@@ -21,16 +21,24 @@ export interface UsageSnapshot {
 
 export interface AppStateSnapshot {
   pin: boolean;
+  compact: boolean;
   lastUsage: UsageSnapshot | null;
+}
+
+export interface StateChange {
+  pin: boolean;
+  compact: boolean;
+  visible: boolean;
 }
 
 export const getState = () => invoke<AppStateSnapshot>("get_state");
 export const refreshNow = () => invoke<void>("refresh_now");
 export const setPin = (pinned: boolean) => invoke<void>("set_pin", { pinned });
+export const setCompact = (compact: boolean) => invoke<void>("set_compact", { compact });
 export const toggleVisibility = () => invoke<void>("toggle_visibility");
 
 export const onUsage = (cb: (s: UsageSnapshot) => void): Promise<UnlistenFn> =>
   listen<UsageSnapshot>("usage://update", (e) => cb(e.payload));
 
-export const onStateChange = (cb: (s: { pin: boolean; visible: boolean }) => void): Promise<UnlistenFn> =>
-  listen<{ pin: boolean; visible: boolean }>("state://change", (e) => cb(e.payload));
+export const onStateChange = (cb: (s: StateChange) => void): Promise<UnlistenFn> =>
+  listen<StateChange>("state://change", (e) => cb(e.payload));

@@ -10,6 +10,7 @@ pub struct TrayHandles {
     pub tray: TrayIcon,
     pub status_item: MenuItem<Wry>,
     pub pin_item: CheckMenuItem<Wry>,
+    pub compact_item: CheckMenuItem<Wry>,
     pub autostart_item: CheckMenuItem<Wry>,
 }
 
@@ -29,10 +30,12 @@ fn icon(status: TrayStatus) -> Image<'static> {
     Image::from_bytes(bytes).expect("embedded tray icon is valid png")
 }
 
-pub fn create(app: &AppHandle, pinned: bool) -> tauri::Result<()> {
+pub fn create(app: &AppHandle, pinned: bool, compact: bool) -> tauri::Result<()> {
     let status_item = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
     let show_hide = MenuItem::with_id(app, "show_hide", "Show / Hide widget", true, None::<&str>)?;
     let pin_item = CheckMenuItem::with_id(app, "pin", "Pin on top", true, pinned, None::<&str>)?;
+    let compact_item =
+        CheckMenuItem::with_id(app, "compact", "Compact view", true, compact, None::<&str>)?;
     let autostart_on = app.autolaunch().is_enabled().unwrap_or(false);
     let autostart_item =
         CheckMenuItem::with_id(app, "autostart", "Start at login", true, autostart_on, None::<&str>)?;
@@ -45,6 +48,7 @@ pub fn create(app: &AppHandle, pinned: bool) -> tauri::Result<()> {
             &PredefinedMenuItem::separator(app)?,
             &show_hide,
             &pin_item,
+            &compact_item,
             &autostart_item,
             &PredefinedMenuItem::separator(app)?,
             &refresh,
@@ -67,6 +71,14 @@ pub fn create(app: &AppHandle, pinned: bool) -> tauri::Result<()> {
                     .is_checked()
                     .unwrap_or(false);
                 crate::commands::apply_pin(app, checked);
+            }
+            "compact" => {
+                let checked = app
+                    .state::<TrayHandles>()
+                    .compact_item
+                    .is_checked()
+                    .unwrap_or(false);
+                crate::commands::apply_compact(app, checked);
             }
             "autostart" => {
                 let autolaunch = app.autolaunch();
@@ -96,7 +108,7 @@ pub fn create(app: &AppHandle, pinned: bool) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    app.manage(TrayHandles { tray, status_item, pin_item, autostart_item });
+    app.manage(TrayHandles { tray, status_item, pin_item, compact_item, autostart_item });
     Ok(())
 }
 
@@ -112,12 +124,19 @@ pub fn toggle_visibility(app: &AppHandle) {
 }
 
 pub fn emit_state(app: &AppHandle) {
-    let pin = app.state::<crate::state::AppState>().0.lock().unwrap().pin;
+    let state = app.state::<crate::state::AppState>();
+    let (pin, compact) = {
+        let s = state.0.lock().unwrap();
+        (s.pin, s.compact)
+    };
     let visible = app
         .get_webview_window("main")
         .and_then(|w| w.is_visible().ok())
         .unwrap_or(false);
-    let _ = app.emit("state://change", serde_json::json!({ "pin": pin, "visible": visible }));
+    let _ = app.emit(
+        "state://change",
+        serde_json::json!({ "pin": pin, "compact": compact, "visible": visible }),
+    );
 }
 
 /// Reflect the latest poll result in the tray: bubble color, tooltip, status line.

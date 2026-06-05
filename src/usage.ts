@@ -50,12 +50,14 @@ function pctColor(pct: number): string {
   return "var(--green)";
 }
 
-// format_reset_time from ui.cpp.
-function formatReset(mins: number): string {
+// format_reset_time from ui.cpp; compact mode drops the "Resets in" prefix.
+function formatReset(mins: number, compact: boolean): string {
   if (mins < 0) return "---";
-  if (mins < 60) return `Resets in ${mins}m`;
-  if (mins < 1440) return `Resets in ${Math.floor(mins / 60)}h ${mins % 60}m`;
-  return `Resets in ${Math.floor(mins / 1440)}d ${Math.floor((mins % 1440) / 60)}h`;
+  let t: string;
+  if (mins < 60) t = `${mins}m`;
+  else if (mins < 1440) t = `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  else t = `${Math.floor(mins / 1440)}d ${Math.floor((mins % 1440) / 60)}h`;
+  return compact ? t : `Resets in ${t}`;
 }
 
 interface PanelEls {
@@ -69,6 +71,7 @@ export class UsageRenderer {
   private spinnerEl: HTMLElement;
   private msgEl: HTMLElement;
   private snapshot: UsageSnapshot | null = null;
+  private compact = false;
   private okSince = 0;
   private spinnerPhase = 0;
   private message = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
@@ -90,6 +93,11 @@ export class UsageRenderer {
     setInterval(() => this.rotateMessage(), MSG_MS);
     // Keep reset countdowns fresh between polls.
     setInterval(() => this.renderResets(), 30_000);
+  }
+
+  setCompact(compact: boolean): void {
+    this.compact = compact;
+    this.renderResets();
   }
 
   update(s: UsageSnapshot): void {
@@ -121,7 +129,7 @@ export class UsageRenderer {
   private resetText(w: UsageWindow): string {
     if (w.resetAt === null) return "---";
     const mins = Math.max(0, Math.round((w.resetAt * 1000 - Date.now()) / 60_000));
-    return formatReset(mins);
+    return formatReset(mins, this.compact);
   }
 
   private renderResets(): void {

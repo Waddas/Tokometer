@@ -163,6 +163,52 @@ body {
   image-rendering: pixelated;
 }
 
+/* ---- compact mode (282x168 design space -> 188x112 window) ----
+ * Mascot chip on the left, the two usage windows as small stacked tiles on
+ * the right: big percentage over a short reset countdown, both centered. */
+body.compact .title,
+body.compact .pill,
+body.compact .bar,
+body.compact #status-line {
+  display: none;
+}
+
+body.compact #splash-view {
+  inset: auto;
+  top: 14px;
+  left: 14px;
+  width: 140px;
+  height: 140px;
+  background: var(--panel);
+  border-radius: 8px;
+}
+
+body.compact .panel {
+  left: 168px;
+  width: 100px;
+  height: 65px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+body.compact .panel[data-window="session"] {
+  top: 14px;
+}
+body.compact .panel[data-window="weekly"] {
+  top: 89px;
+}
+
+body.compact .pct {
+  position: static;
+  font-size: 36px;
+}
+
+body.compact .reset {
+  position: static;
+  font-size: 18px;
+}
+
 /* ---- hover controls (real pixels, not design space) ---- */
 #controls {
   position: absolute;
