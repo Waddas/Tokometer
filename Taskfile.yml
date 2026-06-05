@@ -1,0 +1,91 @@
+# Task runner for ClordGauge — https://taskfile.dev
+# `task` uses a built-in POSIX-sh interpreter on every OS, so these run the
+# same on macOS, Windows, and Linux (see cross-platform constraint).
+version: "3"
+
+vars:
+  CARGO_MANIFEST: src-tauri/Cargo.toml
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  install:
+    desc: Install frontend dependencies
+    cmds:
+      - npm install
+
+  dev:
+    desc: Run the full Tauri app (Rust + webview) in dev mode
+    cmds:
+      - npm run tauri dev
+
+  dev:web:
+    desc: Run only the Vite frontend dev server
+    cmds:
+      - npm run dev
+
+  build:
+    desc: Build the production Tauri bundle for the current platform
+    cmds:
+      - npm run tauri build
+
+  build:web:
+    desc: Type-check and build the frontend assets only
+    cmds:
+      - npm run build
+
+  test:
+    desc: Run the whole test suite (frontend + Rust)
+    deps:
+      - test:web
+      - test:rust
+
+  test:web:
+    desc: Run the frontend (Vitest) unit tests
+    cmds:
+      - npm run test
+
+  test:watch:
+    desc: Run the frontend tests in watch mode
+    cmds:
+      - npm run test:watch
+
+  test:rust:
+    desc: Run the Rust (cargo) unit tests
+    cmds:
+      - cargo test --manifest-path {{.CARGO_MANIFEST}}
+
+  typecheck:
+    desc: Type-check the frontend without emitting output
+    cmds:
+      - npx tsc --noEmit
+
+  fmt:
+    desc: Format the Rust source
+    cmds:
+      - cargo fmt --manifest-path {{.CARGO_MANIFEST}}
+
+  lint:
+    desc: Lint the Rust source with Clippy
+    cmds:
+      - cargo clippy --manifest-path {{.CARGO_MANIFEST}} -- -D warnings
+
+  check:
+    desc: Type-check, lint, and run every test
+    deps:
+      - typecheck
+      - lint
+      - test
+
+  clean:
+    desc: Remove build artifacts (dist + Rust target)
+    cmds:
+      - cargo clean --manifest-path {{.CARGO_MANIFEST}}
+      - cmd: rm -rf dist
+        platforms: [linux, darwin]
+      - cmd: if exist dist rmdir /s /q dist
+        platforms: [windows]
