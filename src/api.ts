@@ -19,13 +19,24 @@ export interface UsageSnapshot {
   error: string | null;
 }
 
+/** Mirrors the Rust `Layout` enum (state.rs). */
+export type Layout =
+  | "mascot-left"
+  | "mascot-right"
+  | "mascot-top"
+  | "mascot-bottom"
+  | "tiles-row"
+  | "tiles-column";
+
 export interface AppStateSnapshot {
   pin: boolean;
+  layout: Layout;
   lastUsage: UsageSnapshot | null;
 }
 
 export interface StateChange {
   pin: boolean;
+  layout: Layout;
   visible: boolean;
 }
 

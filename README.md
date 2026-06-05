@@ -19,7 +19,9 @@ A frameless, always-available widget that lives in your system tray:
 - The tray icon's status bubble turns green/amber/red with your usage, and its
   tooltip shows the live percentages.
 - **Drag** the widget to move it; hover for pin / refresh / hide controls.
-- Tray menu: show/hide, pin on top, start at login, refresh now, quit.
+- Six layouts — mascot left/right/top/bottom of the tiles, or tiles only
+  (wide/tall) — picked from the tray menu.
+- Tray menu: show/hide, layout, pin on top, start at login, refresh now, quit.
 
 It reads your existing Claude Code login (see below) and polls the usage API
 once a minute — no separate sign-in.

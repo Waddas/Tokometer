@@ -15,7 +15,7 @@
   --amber: #d97757;
   --red: #c0392b;
   --track: #2a2a28;
-  --scale: 0.6667; /* window-width / 282, set from JS */
+  --scale: 0.6667; /* window-width / layout design-width, set from JS */
 }
 
 * {
@@ -44,10 +44,8 @@ body {
   position: relative;
 }
 
-/* Everything inside renders in a 282x168 design space, scaled to fit. */
+/* Everything inside renders in the layout's design space, scaled to fit. */
 #scaler {
-  width: 282px;
-  height: 168px;
   transform: scale(var(--scale));
   transform-origin: top left;
   position: absolute;
@@ -55,22 +53,24 @@ body {
   left: 0;
 }
 
-/* ---- mascot chip ---- */
-#mascot {
+/* ---- mascot chip (the chip can be wider than the mascot; it stays centered) ---- */
+#mascot-chip {
   position: absolute;
-  top: 14px;
-  left: 14px;
-  width: 140px;
-  height: 140px;
   background: var(--panel);
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#mascot {
+  width: 140px;
+  height: 140px;
   image-rendering: pixelated;
 }
 
 /* ---- usage tiles: big percentage over a short reset countdown ---- */
 .panel {
   position: absolute;
-  left: 168px;
   width: 100px;
   height: 65px;
   background: var(--panel);
@@ -80,10 +80,104 @@ body {
   align-items: center;
   justify-content: center;
 }
-.panel[data-window="session"] {
+
+/* ---- layouts ----
+ * Shared grid: 14px margins, 10px gaps, 140px mascot, 100x65 tiles.
+ * Each layout's design space is noted; the window is that x 2/3 (state.rs). */
+
+/* mascot-left: 282x168 */
+.layout-mascot-left #mascot-chip {
+  top: 14px;
+  left: 14px;
+  width: 140px;
+  height: 140px;
+}
+.layout-mascot-left .panel {
+  left: 168px;
+}
+.layout-mascot-left .panel[data-window="session"] {
   top: 14px;
 }
-.panel[data-window="weekly"] {
+.layout-mascot-left .panel[data-window="weekly"] {
+  top: 89px;
+}
+
+/* mascot-right: 282x168 */
+.layout-mascot-right #mascot-chip {
+  top: 14px;
+  left: 128px;
+  width: 140px;
+  height: 140px;
+}
+.layout-mascot-right .panel {
+  left: 14px;
+}
+.layout-mascot-right .panel[data-window="session"] {
+  top: 14px;
+}
+.layout-mascot-right .panel[data-window="weekly"] {
+  top: 89px;
+}
+
+/* mascot-top: 238x243 */
+.layout-mascot-top #mascot-chip {
+  top: 14px;
+  left: 14px;
+  width: 210px;
+  height: 140px;
+}
+.layout-mascot-top .panel {
+  top: 164px;
+}
+.layout-mascot-top .panel[data-window="session"] {
+  left: 14px;
+}
+.layout-mascot-top .panel[data-window="weekly"] {
+  left: 124px;
+}
+
+/* mascot-bottom: 238x243 */
+.layout-mascot-bottom #mascot-chip {
+  top: 89px;
+  left: 14px;
+  width: 210px;
+  height: 140px;
+}
+.layout-mascot-bottom .panel {
+  top: 14px;
+}
+.layout-mascot-bottom .panel[data-window="session"] {
+  left: 14px;
+}
+.layout-mascot-bottom .panel[data-window="weekly"] {
+  left: 124px;
+}
+
+/* tiles-row: 238x93 */
+.layout-tiles-row #mascot-chip {
+  display: none;
+}
+.layout-tiles-row .panel {
+  top: 14px;
+}
+.layout-tiles-row .panel[data-window="session"] {
+  left: 14px;
+}
+.layout-tiles-row .panel[data-window="weekly"] {
+  left: 124px;
+}
+
+/* tiles-column: 128x168 */
+.layout-tiles-column #mascot-chip {
+  display: none;
+}
+.layout-tiles-column .panel {
+  left: 14px;
+}
+.layout-tiles-column .panel[data-window="session"] {
+  top: 14px;
+}
+.layout-tiles-column .panel[data-window="weekly"] {
   top: 89px;
 }
 
@@ -110,6 +204,10 @@ body {
 }
 #root:hover #controls {
   opacity: 1;
+}
+/* The tiles-column window is too narrow for a horizontal button row. */
+.layout-tiles-column #controls {
+  flex-direction: column;
 }
 #controls button {
   width: 28px;

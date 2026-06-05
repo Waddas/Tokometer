@@ -16,14 +16,38 @@ const btnHide = document.getElementById("btn-hide")!;
 const usage = new UsageRenderer(document.body);
 const splash = new Splash(mascotCanvas);
 const rate = new RateTracker();
-splash.start();
 
-/* ---- design-space scaling (282x168 -> window size) ---- */
+/* ---- layouts ----
+ * Each layout has its own design-space width (geometry in styles.css);
+ * the window is the design space scaled by 2/3 (sizes in Rust state.rs). */
+const DESIGN_WIDTH: Record<api.Layout, number> = {
+  "mascot-left": 282,
+  "mascot-right": 282,
+  "mascot-top": 238,
+  "mascot-bottom": 238,
+  "tiles-row": 238,
+  "tiles-column": 128,
+};
+
+let layout: api.Layout = "mascot-left";
+
 function updateScale() {
-  document.documentElement.style.setProperty("--scale", String(window.innerWidth / 282));
+  document.documentElement.style.setProperty(
+    "--scale",
+    String(window.innerWidth / DESIGN_WIDTH[layout]),
+  );
 }
 window.addEventListener("resize", updateScale);
-updateScale();
+
+function applyLayout(l: api.Layout) {
+  layout = l;
+  document.body.className = `layout-${l}`;
+  updateScale();
+  // The mascot only animates while a layout shows it.
+  if (l === "tiles-row" || l === "tiles-column") splash.stop();
+  else splash.start();
+}
+applyLayout(layout);
 
 /* ---- drag to move ---- */
 root.addEventListener("mousedown", (e) => {
@@ -57,10 +81,12 @@ void api.onUsage(applySnapshot);
 void api.onStateChange((s) => {
   pinned = s.pin;
   renderPin();
+  applyLayout(s.layout);
 });
 
 void api.getState().then((st) => {
   pinned = st.pin;
   renderPin();
+  applyLayout(st.layout);
   if (st.lastUsage) applySnapshot(st.lastUsage);
 });

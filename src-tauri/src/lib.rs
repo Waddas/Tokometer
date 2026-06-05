@@ -35,6 +35,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let persisted = state::load(&handle);
             let pin = persisted.pin;
+            let layout = persisted.layout;
             let saved_pos = persisted.window;
             app.manage(state::AppState(Mutex::new(persisted)));
 
@@ -49,8 +50,10 @@ pub fn run() {
                 }
             }
             let _ = win.set_always_on_top(pin);
+            let (w, h) = layout.window_size();
+            let _ = win.set_size(tauri::LogicalSize::new(w, h));
 
-            tray::create(&handle, pin)?;
+            tray::create(&handle, pin, layout)?;
             let _ = win.show();
 
             // Track moves in memory (logical coords); flushed to disk on exit and state saves.

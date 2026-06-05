@@ -11,12 +11,66 @@ pub struct WindowPos {
     pub y: f64,
 }
 
+/// Where the widget places the mascot relative to the usage tiles,
+/// or tiles only ("no mascot").
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Layout {
+    #[default]
+    MascotLeft,
+    MascotRight,
+    MascotTop,
+    MascotBottom,
+    TilesRow,
+    TilesColumn,
+}
+
+impl Layout {
+    pub const ALL: [Layout; 6] = [
+        Layout::MascotLeft,
+        Layout::MascotRight,
+        Layout::MascotTop,
+        Layout::MascotBottom,
+        Layout::TilesRow,
+        Layout::TilesColumn,
+    ];
+
+    /// Stable id; matches the serde kebab-case serialization and the
+    /// frontend's `Layout` union / `layout-*` body classes.
+    pub fn id(self) -> &'static str {
+        match self {
+            Layout::MascotLeft => "mascot-left",
+            Layout::MascotRight => "mascot-right",
+            Layout::MascotTop => "mascot-top",
+            Layout::MascotBottom => "mascot-bottom",
+            Layout::TilesRow => "tiles-row",
+            Layout::TilesColumn => "tiles-column",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Layout> {
+        Self::ALL.into_iter().find(|l| l.id() == id)
+    }
+
+    /// Logical window size: the layout's design space scaled by 2/3
+    /// (see the design-space dimensions in styles.css).
+    pub fn window_size(self) -> (f64, f64) {
+        match self {
+            Layout::MascotLeft | Layout::MascotRight => (188.0, 112.0),
+            Layout::MascotTop | Layout::MascotBottom => (159.0, 162.0),
+            Layout::TilesRow => (159.0, 62.0),
+            Layout::TilesColumn => (85.0, 112.0),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PersistedState {
     /// Logical (DPI-independent) window position.
     pub window: Option<WindowPos>,
     pub pin: bool,
+    pub layout: Layout,
     pub last_usage: Option<UsageSnapshot>,
 }
 

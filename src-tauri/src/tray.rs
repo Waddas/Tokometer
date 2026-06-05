@@ -1,16 +1,30 @@
 use tauri::image::Image;
-use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Wry};
 use tauri_plugin_autostart::ManagerExt;
 
+use crate::state::Layout;
 use crate::usage::UsageSnapshot;
 
 pub struct TrayHandles {
     pub tray: TrayIcon,
     pub status_item: MenuItem<Wry>,
     pub pin_item: CheckMenuItem<Wry>,
+    /// Radio-style: exactly one is checked; apply_layout keeps them in sync.
+    pub layout_items: Vec<(Layout, CheckMenuItem<Wry>)>,
     pub autostart_item: CheckMenuItem<Wry>,
+}
+
+fn layout_label(layout: Layout) -> &'static str {
+    match layout {
+        Layout::MascotLeft => "Mascot left",
+        Layout::MascotRight => "Mascot right",
+        Layout::MascotTop => "Mascot top",
+        Layout::MascotBottom => "Mascot bottom",
+        Layout::TilesRow => "No mascot (wide)",
+        Layout::TilesColumn => "No mascot (tall)",
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -29,10 +43,27 @@ fn icon(status: TrayStatus) -> Image<'static> {
     Image::from_bytes(bytes).expect("embedded tray icon is valid png")
 }
 
-pub fn create(app: &AppHandle, pinned: bool) -> tauri::Result<()> {
+pub fn create(app: &AppHandle, pinned: bool, layout: Layout) -> tauri::Result<()> {
     let status_item = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
     let show_hide = MenuItem::with_id(app, "show_hide", "Show / Hide widget", true, None::<&str>)?;
     let pin_item = CheckMenuItem::with_id(app, "pin", "Pin on top", true, pinned, None::<&str>)?;
+    let layout_items: Vec<(Layout, CheckMenuItem<Wry>)> = Layout::ALL
+        .into_iter()
+        .map(|l| {
+            let item = CheckMenuItem::with_id(
+                app,
+                format!("layout:{}", l.id()),
+                layout_label(l),
+                true,
+                l == layout,
+                None::<&str>,
+            )?;
+            Ok((l, item))
+        })
+        .collect::<tauri::Result<_>>()?;
+    let layout_refs: Vec<&dyn IsMenuItem<Wry>> =
+        layout_items.iter().map(|(_, item)| item as &dyn IsMenuItem<Wry>).collect();
+    let layout_menu = Submenu::with_items(app, "Layout", true, &layout_refs)?;
     let autostart_on = app.autolaunch().is_enabled().unwrap_or(false);
     let autostart_item =
         CheckMenuItem::with_id(app, "autostart", "Start at login", true, autostart_on, None::<&str>)?;
@@ -44,6 +75,7 @@ pub fn create(app: &AppHandle, pinned: bool) -> tauri::Result<()> {
             &status_item,
             &PredefinedMenuItem::separator(app)?,
             &show_hide,
+            &layout_menu,
             &pin_item,
             &autostart_item,
             &PredefinedMenuItem::separator(app)?,
@@ -67,6 +99,11 @@ pub fn create(app: &AppHandle, pinned: bool) -> tauri::Result<()> {
                     .is_checked()
                     .unwrap_or(false);
                 crate::commands::apply_pin(app, checked);
+            }
+            id if id.starts_with("layout:") => {
+                if let Some(layout) = Layout::from_id(&id["layout:".len()..]) {
+                    crate::commands::apply_layout(app, layout);
+                }
             }
             "autostart" => {
                 let autolaunch = app.autolaunch();
@@ -96,7 +133,7 @@ pub fn create(app: &AppHandle, pinned: bool) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    app.manage(TrayHandles { tray, status_item, pin_item, autostart_item });
+    app.manage(TrayHandles { tray, status_item, pin_item, layout_items, autostart_item });
     Ok(())
 }
 
@@ -112,12 +149,19 @@ pub fn toggle_visibility(app: &AppHandle) {
 }
 
 pub fn emit_state(app: &AppHandle) {
-    let pin = app.state::<crate::state::AppState>().0.lock().unwrap().pin;
+    let state = app.state::<crate::state::AppState>();
+    let (pin, layout) = {
+        let s = state.0.lock().unwrap();
+        (s.pin, s.layout)
+    };
     let visible = app
         .get_webview_window("main")
         .and_then(|w| w.is_visible().ok())
         .unwrap_or(false);
-    let _ = app.emit("state://change", serde_json::json!({ "pin": pin, "visible": visible }));
+    let _ = app.emit(
+        "state://change",
+        serde_json::json!({ "pin": pin, "layout": layout, "visible": visible }),
+    );
 }
 
 /// Reflect the latest poll result in the tray: bubble color, tooltip, status line.
