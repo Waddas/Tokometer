@@ -1,18 +1,8 @@
-/* Fonts: open-licensed (SIL OFL 1.1). See src/fonts/. */
+/* Font: open-licensed (SIL OFL 1.1). See src/fonts/. */
 @font-face {
   /* Space Grotesk, instanced at wght=400 and subset to Basic Latin. */
   font-family: "Grotesk";
   src: url("./fonts/SpaceGrotesk-Subset.ttf") format("truetype");
-}
-@font-face {
-  /* Source Serif 4, instanced at opsz=60/wght=500 and subset to Basic Latin. */
-  font-family: "Serif";
-  src: url("./fonts/SourceSerif4-Subset.ttf") format("truetype");
-}
-@font-face {
-  /* Space Mono, subset to Basic Latin + the dashes/middle-dot used in status text. */
-  font-family: "Mono";
-  src: url("./fonts/SpaceMono-Subset.ttf") format("truetype");
 }
 
 :root {
@@ -25,7 +15,7 @@
   --amber: #d97757;
   --red: #c0392b;
   --track: #2a2a28;
-  --scale: 0.6667; /* window-width / 480, set from JS */
+  --scale: 0.6667; /* window-width / 282, set from JS */
 }
 
 * {
@@ -54,10 +44,10 @@ body {
   position: relative;
 }
 
-/* Everything inside renders in Clawdmeter's 480x480 design space, scaled to fit. */
+/* Everything inside renders in a 282x168 design space, scaled to fit. */
 #scaler {
-  width: 480px;
-  height: 480px;
+  width: 282px;
+  height: 168px;
   transform: scale(var(--scale));
   transform-origin: top left;
   position: absolute;
@@ -65,148 +55,46 @@ body {
   left: 0;
 }
 
-/* ---- usage screen (geometry from firmware ui.cpp, 480x480 layout) ---- */
-#usage-view {
+/* ---- mascot chip ---- */
+#mascot {
   position: absolute;
-  inset: 0;
-}
-
-.title {
-  position: absolute;
-  top: 30px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  /* Even, low-contrast display serif (Tiempos-like); weight/opsz baked into the file. */
-  font: 500 56px/1.1 Serif, serif;
-  color: var(--text);
-}
-
-.panel {
-  position: absolute;
-  left: 20px;
-  width: 440px;
-  height: 150px;
-  background: var(--panel);
-  border-radius: 8px;
-}
-.panel[data-window="session"] {
-  top: 100px;
-}
-.panel[data-window="weekly"] {
-  top: 266px;
-}
-
-.pct {
-  position: absolute;
-  top: 12px;
-  left: 16px;
-  font: 400 48px/1.1 Grotesk, sans-serif;
-  color: var(--dim);
-}
-
-.pill {
-  position: absolute;
-  top: 13px;
-  right: 16px;
-  font: 400 28px/1.1 Grotesk, sans-serif;
-  color: var(--text);
-  background: var(--track);
-  border-radius: 999px;
-  padding: 6px 18px;
-}
-
-.bar {
-  position: absolute;
-  top: 68px;
-  left: 16px;
-  width: 408px;
-  height: 24px;
-  background: var(--track);
-  border-radius: 6px;
-  overflow: hidden;
-}
-.fill {
-  height: 100%;
-  width: 0%;
-  background: var(--green);
-  border-radius: 6px;
-  transition: width 0.4s ease;
-}
-
-.reset {
-  position: absolute;
-  top: 106px;
-  left: 16px;
-  font: 400 28px/1.1 Grotesk, sans-serif;
-  color: var(--dim);
-}
-
-#status-line {
-  position: absolute;
-  bottom: 15px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font: 400 32px/1.1 Mono, monospace;
-  color: var(--accent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 10px;
-}
-
-/* ---- splash ---- */
-#splash-view {
-  position: absolute;
-  inset: 0;
-  image-rendering: pixelated;
-}
-
-/* ---- compact mode (282x168 design space -> 188x112 window) ----
- * Mascot chip on the left, the two usage windows as small stacked tiles on
- * the right: big percentage over a short reset countdown, both centered. */
-body.compact .title,
-body.compact .pill,
-body.compact .bar,
-body.compact #status-line {
-  display: none;
-}
-
-body.compact #splash-view {
-  inset: auto;
   top: 14px;
   left: 14px;
   width: 140px;
   height: 140px;
   background: var(--panel);
   border-radius: 8px;
+  image-rendering: pixelated;
 }
 
-body.compact .panel {
+/* ---- usage tiles: big percentage over a short reset countdown ---- */
+.panel {
+  position: absolute;
   left: 168px;
   width: 100px;
   height: 65px;
+  background: var(--panel);
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
-body.compact .panel[data-window="session"] {
+.panel[data-window="session"] {
   top: 14px;
 }
-body.compact .panel[data-window="weekly"] {
+.panel[data-window="weekly"] {
   top: 89px;
 }
 
-body.compact .pct {
-  position: static;
-  font-size: 36px;
+.pct {
+  font: 400 36px/1.1 Grotesk, sans-serif;
+  color: var(--dim);
 }
 
-body.compact .reset {
-  position: static;
-  font-size: 18px;
+.reset {
+  font: 400 18px/1.1 Grotesk, sans-serif;
+  color: var(--dim);
 }
 
 /* ---- hover controls (real pixels, not design space) ---- */

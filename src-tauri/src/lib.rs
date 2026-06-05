@@ -27,7 +27,6 @@ pub fn run() {
             commands::get_state,
             commands::refresh_now,
             commands::set_pin,
-            commands::set_compact,
             commands::toggle_visibility,
             commands::get_autostart,
             commands::set_autostart,
@@ -36,7 +35,6 @@ pub fn run() {
             let handle = app.handle().clone();
             let persisted = state::load(&handle);
             let pin = persisted.pin;
-            let compact = persisted.compact;
             let saved_pos = persisted.window;
             app.manage(state::AppState(Mutex::new(persisted)));
 
@@ -51,12 +49,8 @@ pub fn run() {
                 }
             }
             let _ = win.set_always_on_top(pin);
-            if compact {
-                let (w, h) = commands::COMPACT_SIZE;
-                let _ = win.set_size(tauri::LogicalSize::new(w, h));
-            }
 
-            tray::create(&handle, pin, compact)?;
+            tray::create(&handle, pin)?;
             let _ = win.show();
 
             // Track moves in memory (logical coords); flushed to disk on exit and state saves.

@@ -12,13 +12,13 @@ and a vanilla TypeScript/Vite frontend (`src/`).
 
 A frameless, always-available widget that lives in your system tray:
 
-- Two usage panels — the current **5-hour** session and the rolling **7-day**
-  window — each with a threshold-coloured percentage, fill bar, and reset
+- An animated pixel-art Clawd mascot whose animations follow your usage rate,
+  next to two usage tiles — the current **5-hour** session and the rolling
+  **7-day** window — each with a threshold-coloured percentage and reset
   countdown.
 - The tray icon's status bubble turns green/amber/red with your usage, and its
   tooltip shows the live percentages.
-- **Drag** the widget to move it; **click** it to flip between the usage screen
-  and an animated pixel-art splash. Hover for pin / refresh / hide controls.
+- **Drag** the widget to move it; hover for pin / refresh / hide controls.
 - Tray menu: show/hide, pin on top, start at login, refresh now, quit.
 
 It reads your existing Claude Code login (see below) and polls the usage API
@@ -72,6 +72,6 @@ Outputs land in `src-tauri/target/release/bundle/`.
 
 [MIT](LICENSE).
 
-Bundled fonts (Source Serif 4, Space Grotesk, Space Mono) and pixel-art are
-redistributed under their own permissive licenses — see
+The bundled font (Space Grotesk) and pixel-art are redistributed under their
+own permissive licenses — see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `src/fonts/`.

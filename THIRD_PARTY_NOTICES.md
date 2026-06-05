@@ -4,14 +4,9 @@ clordgauge bundles the following assets, redistributed under their own licenses.
 
 ## Fonts (`src/fonts/`)
 
-- **Source Serif 4** — © The Source Serif 4 Project Authors. SIL Open Font
-  License 1.1. See `src/fonts/SourceSerif4-OFL.txt`.
-  https://github.com/adobe-fonts/source-serif
 - **Space Grotesk** — © The Space Grotesk Project Authors. SIL Open Font
   License 1.1. See `src/fonts/SpaceGrotesk-OFL.txt`.
   https://github.com/floriankarsten/space-grotesk
-- **Space Mono** — © The Space Mono Project Authors. SIL Open Font License 1.1.
-  See `src/fonts/SpaceMono-OFL.txt`. https://github.com/googlefonts/spacemono
 
 ## Artwork
 

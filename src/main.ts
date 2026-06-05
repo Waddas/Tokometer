@@ -8,83 +8,27 @@ import { RateTracker } from "./rate";
 const appWindow = getCurrentWindow();
 
 const root = document.getElementById("root")!;
-const usageEl = document.getElementById("usage-view")!;
-const splashCanvas = document.getElementById("splash-view") as HTMLCanvasElement;
-const btnCompact = document.getElementById("btn-compact")!;
+const mascotCanvas = document.getElementById("mascot") as HTMLCanvasElement;
 const btnPin = document.getElementById("btn-pin")!;
 const btnRefresh = document.getElementById("btn-refresh")!;
 const btnHide = document.getElementById("btn-hide")!;
 
-const usage = new UsageRenderer(usageEl);
-const splash = new Splash(splashCanvas);
+const usage = new UsageRenderer(document.body);
+const splash = new Splash(mascotCanvas);
 const rate = new RateTracker();
+splash.start();
 
-/* ---- design-space scaling (mode's design width -> window width) ---- */
-let compact = false;
+/* ---- design-space scaling (282x168 -> window size) ---- */
 function updateScale() {
-  const designWidth = compact ? 282 : 480;
-  document.documentElement.style.setProperty("--scale", String(window.innerWidth / designWidth));
+  document.documentElement.style.setProperty("--scale", String(window.innerWidth / 282));
 }
 window.addEventListener("resize", updateScale);
 updateScale();
 
-/* ---- view toggle (mirrors tapping the Clawdmeter screen) ---- */
-let view: "usage" | "splash" = "usage";
-function setView(v: typeof view) {
-  view = v;
-  usageEl.hidden = v !== "usage";
-  splashCanvas.hidden = v !== "splash";
-  if (v === "splash") splash.start();
-  else splash.stop();
-}
-
-/* ---- compact mode (mascot + slim usage rows, half-height window) ---- */
-function applyCompact(c: boolean) {
-  compact = c;
-  document.body.classList.toggle("compact", c);
-  updateScale();
-  usage.setCompact(c);
-  btnCompact.textContent = c ? "⊞" : "⊟";
-  btnCompact.title = c ? "Expand" : "Compact view";
-  if (c) {
-    // Both views render side by side; the mascot is always animating.
-    usageEl.hidden = false;
-    splashCanvas.hidden = false;
-    splash.start();
-  } else {
-    setView(view);
-  }
-}
-
-/* ---- drag vs click gesture ----
- * mousedown records the origin; moving past the threshold hands the gesture
- * to the OS via startDragging(), a clean release toggles splash <-> usage. */
-const DRAG_THRESHOLD = 4;
-let pressed = false;
+/* ---- drag to move ---- */
 root.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
-  pressed = true;
-  const sx = e.clientX;
-  const sy = e.clientY;
-  const onMove = (ev: MouseEvent) => {
-    if (!pressed) return;
-    if (Math.abs(ev.clientX - sx) > DRAG_THRESHOLD || Math.abs(ev.clientY - sy) > DRAG_THRESHOLD) {
-      pressed = false;
-      cleanup();
-      void appWindow.startDragging();
-    }
-  };
-  const onUp = () => {
-    if (pressed && !compact) setView(view === "usage" ? "splash" : "usage");
-    pressed = false;
-    cleanup();
-  };
-  const cleanup = () => {
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup", onUp);
-  };
-  window.addEventListener("mousemove", onMove);
-  window.addEventListener("mouseup", onUp);
+  void appWindow.startDragging();
 });
 
 /* ---- hover controls ---- */
@@ -93,10 +37,9 @@ function renderPin() {
   btnPin.classList.toggle("pinned", pinned);
   btnPin.title = pinned ? "Unpin" : "Pin on top";
 }
-for (const btn of [btnCompact, btnPin, btnRefresh, btnHide]) {
+for (const btn of [btnPin, btnRefresh, btnHide]) {
   btn.addEventListener("mousedown", (e) => e.stopPropagation());
 }
-btnCompact.addEventListener("click", () => void api.setCompact(!compact));
 btnPin.addEventListener("click", () => void api.setPin(!pinned));
 btnRefresh.addEventListener("click", () => void api.refreshNow());
 btnHide.addEventListener("click", () => void api.toggleVisibility());
@@ -114,12 +57,10 @@ void api.onUsage(applySnapshot);
 void api.onStateChange((s) => {
   pinned = s.pin;
   renderPin();
-  if (s.compact !== compact) applyCompact(s.compact);
 });
 
 void api.getState().then((st) => {
   pinned = st.pin;
   renderPin();
-  if (st.compact) applyCompact(st.compact);
   if (st.lastUsage) applySnapshot(st.lastUsage);
 });

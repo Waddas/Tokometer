@@ -74,8 +74,7 @@ export class Splash {
     const { ctx, canvas, cell } = this;
     const offX = Math.floor((canvas.width - cell * GRID) / 2);
     const offY = Math.floor((canvas.height - cell * GRID) / 2);
-    // Transparent clear: the backdrop comes from CSS (black root in full view,
-    // panel chip behind the mascot in compact view).
+    // Transparent clear: the panel-chip backdrop comes from CSS.
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (let y = 0; y < GRID; y++) {
       for (let x = 0; x < GRID; x++) {

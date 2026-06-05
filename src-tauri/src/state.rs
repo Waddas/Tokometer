@@ -17,7 +17,6 @@ pub struct PersistedState {
     /// Logical (DPI-independent) window position.
     pub window: Option<WindowPos>,
     pub pin: bool,
-    pub compact: bool,
     pub last_usage: Option<UsageSnapshot>,
 }
 
