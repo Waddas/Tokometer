@@ -99,3 +99,84 @@ pub fn save(app: &AppHandle) {
     }
     let _ = std::fs::write(path, json);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn id_round_trips_through_from_id_for_every_layout() {
+        for layout in Layout::ALL {
+            assert_eq!(Layout::from_id(layout.id()), Some(layout));
+        }
+    }
+
+    #[test]
+    fn from_id_rejects_unknown_ids() {
+        assert_eq!(Layout::from_id("mascot-diagonal"), None);
+        assert_eq!(Layout::from_id(""), None);
+    }
+
+    #[test]
+    fn ids_match_the_frontend_union() {
+        // These strings are the contract with src/api.ts `Layout` and the
+        // `layout-*` body classes — changing one side must change the other.
+        assert_eq!(Layout::MascotLeft.id(), "mascot-left");
+        assert_eq!(Layout::MascotRight.id(), "mascot-right");
+        assert_eq!(Layout::MascotTop.id(), "mascot-top");
+        assert_eq!(Layout::MascotBottom.id(), "mascot-bottom");
+        assert_eq!(Layout::TilesRow.id(), "tiles-row");
+        assert_eq!(Layout::TilesColumn.id(), "tiles-column");
+    }
+
+    #[test]
+    fn every_layout_has_a_positive_window_size() {
+        for layout in Layout::ALL {
+            let (w, h) = layout.window_size();
+            assert!(w > 0.0 && h > 0.0, "{:?} has a non-positive size", layout);
+        }
+    }
+
+    #[test]
+    fn default_layout_is_mascot_left() {
+        assert_eq!(Layout::default(), Layout::MascotLeft);
+    }
+
+    #[test]
+    fn layout_serializes_as_kebab_case() {
+        let v = serde_json::to_value(Layout::TilesColumn).unwrap();
+        assert_eq!(v, serde_json::json!("tiles-column"));
+    }
+
+    #[test]
+    fn persisted_state_fills_missing_fields_with_defaults() {
+        // The poller writes partial state early on; load() must tolerate it.
+        let s: PersistedState = serde_json::from_str("{}").unwrap();
+        assert!(!s.pin);
+        assert_eq!(s.layout, Layout::MascotLeft);
+        assert!(s.window.is_none());
+        assert!(s.last_usage.is_none());
+    }
+
+    #[test]
+    fn persisted_state_round_trips_through_json() {
+        let original = PersistedState {
+            window: Some(WindowPos { x: 12.0, y: 34.0 }),
+            pin: true,
+            layout: Layout::TilesRow,
+            last_usage: None,
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let back: PersistedState = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.pin, original.pin);
+        assert_eq!(back.layout, original.layout);
+        assert_eq!(back.window.unwrap().x, 12.0);
+    }
+
+    #[test]
+    fn persisted_state_uses_camel_case_keys() {
+        let s = PersistedState { pin: true, ..Default::default() };
+        let v = serde_json::to_value(&s).unwrap();
+        assert!(v.get("lastUsage").is_some());
+    }
+}

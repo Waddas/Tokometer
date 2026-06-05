@@ -74,3 +74,56 @@ pub fn read() -> Result<Credentials, String> {
     }
     Err("no Claude credentials found — run `claude login`".into())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::usage::now_ms;
+
+    #[test]
+    fn parses_nested_claude_ai_oauth_layout() {
+        let creds = parse(
+            r#"{"claudeAiOauth": {"accessToken": "tok-123", "expiresAt": 1780682400000}}"#,
+        )
+        .unwrap();
+        assert_eq!(creds.token, "tok-123");
+        assert_eq!(creds.expires_at, Some(1_780_682_400_000));
+    }
+
+    #[test]
+    fn parses_bare_access_token_layout() {
+        let creds = parse(r#"{"accessToken": "tok-456"}"#).unwrap();
+        assert_eq!(creds.token, "tok-456");
+        assert_eq!(creds.expires_at, None);
+    }
+
+    #[test]
+    fn returns_none_without_an_access_token() {
+        assert!(parse(r#"{"claudeAiOauth": {"refreshToken": "x"}}"#).is_none());
+        assert!(parse(r#"{"somethingElse": true}"#).is_none());
+    }
+
+    #[test]
+    fn returns_none_for_invalid_json() {
+        assert!(parse("not json at all").is_none());
+        assert!(parse("").is_none());
+    }
+
+    #[test]
+    fn looks_expired_is_false_for_future_expiry() {
+        let creds = Credentials { token: "t".into(), expires_at: Some(now_ms() + 60_000) };
+        assert!(!creds.looks_expired());
+    }
+
+    #[test]
+    fn looks_expired_is_true_for_past_expiry() {
+        let creds = Credentials { token: "t".into(), expires_at: Some(now_ms() - 60_000) };
+        assert!(creds.looks_expired());
+    }
+
+    #[test]
+    fn looks_expired_is_false_when_expiry_is_unknown() {
+        let creds = Credentials { token: "t".into(), expires_at: None };
+        assert!(!creds.looks_expired());
+    }
+}

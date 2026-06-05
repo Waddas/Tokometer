@@ -8,6 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "convert:animations": "node tools/convert_animations.mjs",
     "gen:icons": "node tools/gen_icons.mjs"
   },
@@ -16,7 +19,9 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2",
+    "happy-dom": "^20.10.1",
     "typescript": "^5.6.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.1.8"
   }
 }
