@@ -21,3 +21,8 @@ serde_json = "1"
 # native-tls (schannel) so corporate root CAs in the Windows cert store work
 reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
 tokio = { version = "1", features = ["time", "sync"] }
+
+[target.'cfg(windows)'.dependencies]
+# Raising a pinned widget back above the taskbar needs a raw SetWindowPos
+# (tao no-ops set_always_on_top when the flag is unchanged).
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }

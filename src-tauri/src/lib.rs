@@ -9,6 +9,29 @@ use std::sync::{Arc, Mutex};
 use tauri::{Manager, RunEvent, WindowEvent};
 use tokio::sync::Notify;
 
+/// Raise the window back to the top of the topmost z-band (above the taskbar).
+/// tao no-ops `set_always_on_top(true)` when the flag is already set, so this
+/// issues the SetWindowPos call directly.
+#[cfg(target_os = "windows")]
+fn raise_topmost(win: &tauri::WebviewWindow) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    };
+    if let Ok(hwnd) = win.hwnd() {
+        unsafe {
+            SetWindowPos(
+                hwnd.0 as _,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            );
+        }
+    }
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -56,19 +79,51 @@ pub fn run() {
             tray::create(&handle, pin, layout)?;
             let _ = win.show();
 
-            // Track moves in memory (logical coords); flushed to disk on exit and state saves.
-            let win_for_scale = win.clone();
-            let move_handle = handle.clone();
-            win.on_window_event(move |event| {
-                if let WindowEvent::Moved(physical) = event {
-                    let scale = win_for_scale.scale_factor().unwrap_or(1.0);
+            let event_win = win.clone();
+            let event_handle = handle.clone();
+            win.on_window_event(move |event| match event {
+                // Track moves in memory (logical coords); flushed to disk on exit and state saves.
+                WindowEvent::Moved(physical) => {
+                    let scale = event_win.scale_factor().unwrap_or(1.0);
                     let logical = physical.to_logical::<f64>(scale);
-                    if let Some(state) = move_handle.try_state::<state::AppState>() {
+                    if let Some(state) = event_handle.try_state::<state::AppState>() {
                         state.0.lock().unwrap().window =
                             Some(state::WindowPos { x: logical.x, y: logical.y });
                     }
                 }
+                // The Windows taskbar shares the topmost z-band with a pinned widget
+                // and raises itself above us when clicked — re-assert right away.
+                #[cfg(target_os = "windows")]
+                WindowEvent::Focused(false) => {
+                    if let Some(state) = event_handle.try_state::<state::AppState>() {
+                        if state.0.lock().unwrap().pin {
+                            raise_topmost(&event_win);
+                        }
+                    }
+                }
+                _ => {}
             });
+
+            // Catch taskbar raises that happen while the widget isn't focused
+            // (no event reaches us) by periodically re-asserting topmost.
+            #[cfg(target_os = "windows")]
+            {
+                let topmost_handle = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
+                    loop {
+                        tick.tick().await;
+                        if !topmost_handle.state::<state::AppState>().0.lock().unwrap().pin {
+                            continue;
+                        }
+                        if let Some(win) = topmost_handle.get_webview_window("main") {
+                            if win.is_visible().unwrap_or(false) {
+                                raise_topmost(&win);
+                            }
+                        }
+                    }
+                });
+            }
 
             poller::spawn(handle);
             Ok(())
