@@ -28,21 +28,27 @@ export type Layout =
   | "tiles-row"
   | "tiles-column";
 
+/** Mirrors the Rust `Mascot` enum (state.rs) and `MascotId` (mascots.ts). */
+export type Mascot = "clawd" | "axolotl" | "cat";
+
 export interface AppStateSnapshot {
   pin: boolean;
   layout: Layout;
+  mascot: Mascot;
   lastUsage: UsageSnapshot | null;
 }
 
 export interface StateChange {
   pin: boolean;
   layout: Layout;
+  mascot: Mascot;
   visible: boolean;
 }
 
 export const getState = () => invoke<AppStateSnapshot>("get_state");
 export const refreshNow = () => invoke<void>("refresh_now");
 export const setPin = (pinned: boolean) => invoke<void>("set_pin", { pinned });
+export const setMascot = (mascot: Mascot) => invoke<void>("set_mascot", { mascot });
 export const toggleVisibility = () => invoke<void>("toggle_visibility");
 
 export const onUsage = (cb: (s: UsageSnapshot) => void): Promise<UnlistenFn> =>

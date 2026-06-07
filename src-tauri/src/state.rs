@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
@@ -64,6 +65,34 @@ impl Layout {
     }
 }
 
+/// Which mascot the splash animates. Tiles-only layouts hide it regardless.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Mascot {
+    #[default]
+    Clawd,
+    Axolotl,
+    Cat,
+}
+
+impl Mascot {
+    pub const ALL: [Mascot; 3] = [Mascot::Clawd, Mascot::Axolotl, Mascot::Cat];
+
+    /// Stable id; matches the serde serialization and the frontend's
+    /// `Mascot` union / `MascotId` registry keys.
+    pub fn id(self) -> &'static str {
+        match self {
+            Mascot::Clawd => "clawd",
+            Mascot::Axolotl => "axolotl",
+            Mascot::Cat => "cat",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Mascot> {
+        Self::ALL.into_iter().find(|m| m.id() == id)
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PersistedState {
@@ -71,6 +100,7 @@ pub struct PersistedState {
     pub window: Option<WindowPos>,
     pub pin: bool,
     pub layout: Layout,
+    pub mascot: Mascot,
     pub last_usage: Option<UsageSnapshot>,
 }
 
@@ -97,7 +127,17 @@ pub fn save(app: &AppHandle) {
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    let _ = std::fs::write(path, json);
+    // Write-then-rename so a crash or a concurrent save (the poller thread and a
+    // tray/UI action can both call this) can never leave a truncated state.json.
+    // A corrupt file would make load() silently fall back to *all* defaults,
+    // discarding the user's mascot, layout, pin and window position.
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let tmp = path.with_extension(format!("{}.tmp", SEQ.fetch_add(1, Ordering::Relaxed)));
+    if std::fs::write(&tmp, json).is_ok() {
+        let _ = std::fs::rename(&tmp, &path);
+    } else {
+        let _ = std::fs::remove_file(&tmp);
+    }
 }
 
 #[cfg(test)]
@@ -149,11 +189,33 @@ mod tests {
     }
 
     #[test]
+    fn mascot_id_round_trips_and_rejects_unknown() {
+        for mascot in Mascot::ALL {
+            assert_eq!(Mascot::from_id(mascot.id()), Some(mascot));
+        }
+        assert_eq!(Mascot::from_id("dragon"), None);
+    }
+
+    #[test]
+    fn mascot_ids_match_the_frontend_union() {
+        // Contract with src/api.ts `Mascot` and src/mascots.ts `MASCOTS` keys.
+        assert_eq!(Mascot::Clawd.id(), "clawd");
+        assert_eq!(Mascot::Axolotl.id(), "axolotl");
+        assert_eq!(Mascot::Cat.id(), "cat");
+    }
+
+    #[test]
+    fn default_mascot_is_clawd() {
+        assert_eq!(Mascot::default(), Mascot::Clawd);
+    }
+
+    #[test]
     fn persisted_state_fills_missing_fields_with_defaults() {
         // The poller writes partial state early on; load() must tolerate it.
         let s: PersistedState = serde_json::from_str("{}").unwrap();
         assert!(!s.pin);
         assert_eq!(s.layout, Layout::MascotLeft);
+        assert_eq!(s.mascot, Mascot::Clawd);
         assert!(s.window.is_none());
         assert!(s.last_usage.is_none());
     }
@@ -164,12 +226,14 @@ mod tests {
             window: Some(WindowPos { x: 12.0, y: 34.0 }),
             pin: true,
             layout: Layout::TilesRow,
+            mascot: Mascot::Axolotl,
             last_usage: None,
         };
         let json = serde_json::to_string(&original).unwrap();
         let back: PersistedState = serde_json::from_str(&json).unwrap();
         assert_eq!(back.pin, original.pin);
         assert_eq!(back.layout, original.layout);
+        assert_eq!(back.mascot, original.mascot);
         assert_eq!(back.window.unwrap().x, 12.0);
     }
 

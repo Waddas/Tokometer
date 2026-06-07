@@ -12,16 +12,18 @@ and a vanilla TypeScript/Vite frontend (`src/`).
 
 A frameless, always-available widget that lives in your system tray:
 
-- An animated pixel-art Clawd mascot whose animations follow your usage rate,
-  next to two usage tiles — the current **5-hour** session and the rolling
-  **7-day** window — each with a threshold-coloured percentage and reset
-  countdown.
+- An animated pixel-art mascot whose animations follow your usage rate, next to
+  two usage tiles — the current **5-hour** session and the rolling **7-day**
+  window — each with a threshold-coloured percentage and reset countdown.
+  Pick between **Clawd** (default), an **Axolotl**, or a **Cat** from the tray
+  menu.
 - The tray icon's status bubble turns green/amber/red with your usage, and its
   tooltip shows the live percentages.
 - **Drag** the widget to move it; hover for pin / refresh / hide controls.
 - Six layouts — mascot left/right/top/bottom of the tiles, or tiles only
   (wide/tall) — picked from the tray menu.
-- Tray menu: show/hide, layout, pin on top, start at login, refresh now, quit.
+- Tray menu: show/hide, layout, mascot, pin on top, start at login, refresh now,
+  quit.
 
 It reads your existing Claude Code login (see below) and polls the usage API
 once a minute — no separate sign-in.

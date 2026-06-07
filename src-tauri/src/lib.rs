@@ -50,6 +50,7 @@ pub fn run() {
             commands::get_state,
             commands::refresh_now,
             commands::set_pin,
+            commands::set_mascot,
             commands::toggle_visibility,
             commands::get_autostart,
             commands::set_autostart,
@@ -59,6 +60,7 @@ pub fn run() {
             let persisted = state::load(&handle);
             let pin = persisted.pin;
             let layout = persisted.layout;
+            let mascot = persisted.mascot;
             let saved_pos = persisted.window;
             app.manage(state::AppState(Mutex::new(persisted)));
 
@@ -76,7 +78,7 @@ pub fn run() {
             let (w, h) = layout.window_size();
             let _ = win.set_size(tauri::LogicalSize::new(w, h));
 
-            tray::create(&handle, pin, layout)?;
+            tray::create(&handle, pin, layout, mascot)?;
             let _ = win.show();
 
             let event_win = win.clone();

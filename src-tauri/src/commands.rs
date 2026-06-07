@@ -3,12 +3,12 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::poller::RefreshSignal;
-use crate::state::{AppState, Layout};
+use crate::state::{AppState, Layout, Mascot};
 
 #[tauri::command]
 pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
     let s = state.0.lock().unwrap();
-    json!({ "pin": s.pin, "layout": s.layout, "lastUsage": s.last_usage })
+    json!({ "pin": s.pin, "layout": s.layout, "mascot": s.mascot, "lastUsage": s.last_usage })
 }
 
 #[tauri::command]
@@ -19,6 +19,13 @@ pub fn refresh_now(signal: State<'_, RefreshSignal>) {
 #[tauri::command]
 pub fn set_pin(app: AppHandle, pinned: bool) {
     apply_pin(&app, pinned);
+}
+
+#[tauri::command]
+pub fn set_mascot(app: AppHandle, mascot: String) {
+    if let Some(mascot) = Mascot::from_id(&mascot) {
+        apply_mascot(&app, mascot);
+    }
 }
 
 #[tauri::command]
@@ -67,6 +74,19 @@ pub fn apply_layout(app: &AppHandle, layout: Layout) {
     if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
         for (l, item) in &handles.layout_items {
             let _ = item.set_checked(*l == layout);
+        }
+    }
+    crate::tray::emit_state(app);
+}
+
+/// Single mutation path for the mascot — persists and syncs the tray's
+/// radio-style check items. The splash swaps artwork on the state change event.
+pub fn apply_mascot(app: &AppHandle, mascot: Mascot) {
+    app.state::<AppState>().0.lock().unwrap().mascot = mascot;
+    crate::state::save(app);
+    if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
+        for (m, item) in &handles.mascot_items {
+            let _ = item.set_checked(*m == mascot);
         }
     }
     crate::tray::emit_state(app);

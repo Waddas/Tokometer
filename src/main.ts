@@ -82,11 +82,13 @@ void api.onStateChange((s) => {
   pinned = s.pin;
   renderPin();
   applyLayout(s.layout);
+  splash.setMascot(s.mascot);
 });
 
 void api.getState().then((st) => {
   pinned = st.pin;
   renderPin();
   applyLayout(st.layout);
+  splash.setMascot(st.mascot);
   if (st.lastUsage) applySnapshot(st.lastUsage);
 });
