@@ -16,7 +16,7 @@
         "label": "main",
         "title": "clordgauge",
         "width": 188,
-        "height": 112,
+        "height": 140,
         "resizable": false,
         "decorations": false,
         "transparent": true,

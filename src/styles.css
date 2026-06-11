@@ -35,13 +35,16 @@ body {
   overflow: hidden;
 }
 
+/* The widget sits below a 28px transparent strip that hosts the controls. */
 #root {
-  width: 100vw;
-  height: 100vh;
+  position: absolute;
+  top: 28px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: var(--bg);
   border-radius: 16px;
   overflow: hidden;
-  position: relative;
 }
 
 /* Everything inside renders in the layout's design space, scaled to fit. */
@@ -68,6 +71,24 @@ body {
   image-rendering: pixelated;
 }
 
+/* The chip flips between the mascot and the usage graph on click. */
+#mascot-chip {
+  cursor: pointer;
+}
+#mascot-chip #graph {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+}
+#mascot-chip.show-graph #graph {
+  display: block;
+}
+#mascot-chip.show-graph #mascot {
+  display: none;
+}
+
 /* ---- usage tiles: big percentage over a short reset countdown ---- */
 .panel {
   position: absolute;
@@ -80,6 +101,7 @@ body {
   align-items: center;
   justify-content: center;
 }
+
 
 /* ---- layouts ----
  * Shared grid: 14px margins, 10px gaps, 140px mascot, 100x65 tiles.
@@ -191,27 +213,52 @@ body {
   color: var(--dim);
 }
 
-/* ---- hover controls (real pixels, not design space) ---- */
+/* ---- grab handle: dragging, since the tiles now react to clicks ---- */
+#drag-handle {
+  position: absolute;
+  top: 5px;
+  left: 8px;
+  width: 18px;
+  height: 18px;
+  padding-top: 2px; /* the glyph's ink sits high; optically center it */
+  border: none;
+  border-radius: 4px;
+  background: rgba(31, 31, 30, 0.85);
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 1;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+  outline: none;
+}
+body:hover #drag-handle {
+  opacity: 1;
+}
+#drag-handle:active {
+  cursor: grabbing;
+}
+
+/* ---- hover controls: in the strip above the widget (real pixels) ---- */
 #controls {
   position: absolute;
-  top: 8px;
+  top: 0;
   right: 8px;
+  height: 28px;
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
   opacity: 0;
   transition: opacity 0.15s;
   z-index: 10;
 }
-#root:hover #controls {
+body:hover #controls {
   opacity: 1;
 }
-/* The tiles-column window is too narrow for a horizontal button row. */
-.layout-tiles-column #controls {
-  flex-direction: column;
-}
 #controls button {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: 6px;
   background: rgba(31, 31, 30, 0.85);
@@ -225,5 +272,38 @@ body {
   color: var(--text);
 }
 #btn-pin.pinned {
+  color: var(--accent);
+}
+
+/* ---- mascot picker (right-click menu, real pixels) ---- */
+#mascot-menu {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--track);
+  border-radius: 6px;
+}
+#mascot-menu[hidden] {
+  display: none;
+}
+#mascot-menu button {
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  font: 400 13px/1.4 Grotesk, sans-serif;
+  text-align: left;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+#mascot-menu button:hover {
+  background: var(--track);
+  color: var(--text);
+}
+#mascot-menu button.selected {
   color: var(--accent);
 }

@@ -32,6 +32,20 @@ fn raise_topmost(win: &tauri::WebviewWindow) {
     }
 }
 
+/// Whether the mouse cursor is currently over the widget window.
+#[cfg(target_os = "windows")]
+fn cursor_over_window(win: &tauri::WebviewWindow) -> bool {
+    let (Ok(pos), Ok(size), Ok(cursor)) =
+        (win.outer_position(), win.outer_size(), win.cursor_position())
+    else {
+        return false;
+    };
+    cursor.x >= pos.x as f64
+        && cursor.x < (pos.x + size.width as i32) as f64
+        && cursor.y >= pos.y as f64
+        && cursor.y < (pos.y + size.height as i32) as f64
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -119,7 +133,9 @@ pub fn run() {
                             continue;
                         }
                         if let Some(win) = topmost_handle.get_webview_window("main") {
-                            if win.is_visible().unwrap_or(false) {
+                            // Skip while hovered: the raise would hide native
+                            // tooltips, and the user is on the widget anyway.
+                            if win.is_visible().unwrap_or(false) && !cursor_over_window(&win) {
                                 raise_topmost(&win);
                             }
                         }

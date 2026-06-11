@@ -54,14 +54,17 @@ impl Layout {
     }
 
     /// Logical window size: the layout's design space scaled by 2/3
-    /// (see the design-space dimensions in styles.css).
+    /// (see the design-space dimensions in styles.css), plus the 28px
+    /// strip above the widget that hosts the hover controls.
     pub fn window_size(self) -> (f64, f64) {
-        match self {
+        const CONTROLS_STRIP: f64 = 28.0;
+        let (w, h) = match self {
             Layout::MascotLeft | Layout::MascotRight => (188.0, 112.0),
             Layout::MascotTop | Layout::MascotBottom => (159.0, 162.0),
             Layout::TilesRow => (159.0, 62.0),
             Layout::TilesColumn => (85.0, 112.0),
-        }
+        };
+        (w, h + CONTROLS_STRIP)
     }
 }
 

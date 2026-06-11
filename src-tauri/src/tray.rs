@@ -20,12 +20,12 @@ pub struct TrayHandles {
 
 fn layout_label(layout: Layout) -> &'static str {
     match layout {
-        Layout::MascotLeft => "Mascot left",
-        Layout::MascotRight => "Mascot right",
-        Layout::MascotTop => "Mascot top",
-        Layout::MascotBottom => "Mascot bottom",
-        Layout::TilesRow => "No mascot (wide)",
-        Layout::TilesColumn => "No mascot (tall)",
+        Layout::MascotLeft => "Display left",
+        Layout::MascotRight => "Display right",
+        Layout::MascotTop => "Display top",
+        Layout::MascotBottom => "Display bottom",
+        Layout::TilesRow => "Tiles only (wide)",
+        Layout::TilesColumn => "Tiles only (tall)",
     }
 }
 
