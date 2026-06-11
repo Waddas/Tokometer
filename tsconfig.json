@@ -9,6 +9,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noEmit": true,
+    "types": ["vite/client"],
     "skipLibCheck": true,
     "isolatedModules": true,
     "useDefineForClassFields": true

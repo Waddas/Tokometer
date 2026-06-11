@@ -134,9 +134,12 @@ btnRefresh.addEventListener("click", () => void api.refreshNow());
 btnHide.addEventListener("click", () => void api.toggleVisibility());
 
 /* ---- data wiring ---- */
+let mockActive = false;
+let lastReal: api.UsageSnapshot | null = null;
+
 function applySnapshot(s: api.UsageSnapshot) {
   usage.update(s);
-  history.sample(s);
+  if (!mockActive) history.sample(s);
   graph.update(s);
   if (s.status === "ok" && s.fiveHour) {
     rate.sample(s.fiveHour.utilization);
@@ -144,7 +147,29 @@ function applySnapshot(s: api.UsageSnapshot) {
   }
 }
 
-void api.onUsage(applySnapshot);
+void api.onUsage((s) => {
+  lastReal = s;
+  if (!mockActive) applySnapshot(s);
+});
+
+/* ---- dev: press M to toggle mocked data ---- */
+if (import.meta.env.DEV) {
+  window.addEventListener("keydown", (e) => {
+    if (e.key.toLowerCase() !== "m" || e.repeat) return;
+    void import("./mock").then(({ MockHistory }) => {
+      mockActive = !mockActive;
+      console.info(`mock data: ${mockActive ? "on" : "off"}`);
+      if (mockActive) {
+        const mock = new MockHistory();
+        graph.setHistory(mock);
+        applySnapshot(mock.snapshot);
+      } else {
+        graph.setHistory(history);
+        if (lastReal) applySnapshot(lastReal);
+      }
+    });
+  });
+}
 void api.onStateChange((s) => {
   pinned = s.pin;
   renderPin();
@@ -159,5 +184,8 @@ void api.getState().then((st) => {
   applyLayout(st.layout);
   splash.setMascot(st.mascot);
   markMascot(st.mascot);
-  if (st.lastUsage) applySnapshot(st.lastUsage);
+  if (st.lastUsage) {
+    lastReal = st.lastUsage;
+    if (!mockActive) applySnapshot(st.lastUsage);
+  }
 });

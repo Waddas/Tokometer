@@ -20,6 +20,11 @@ const GREEN = "#788c5d";
 const AMBER = "#d97757";
 const RED = "#c0392b";
 const DIM = "#b0aea5";
+const TEXT = "#faf9f5";
+const TRACK = "#2a2a28";
+
+/** What the graph reads its samples from; UsageHistory or a dev mock. */
+export type GraphSource = Pick<UsageHistory, "points">;
 
 const PAD = 8; // design px
 
@@ -29,7 +34,7 @@ export class UsageGraph {
 
   constructor(
     private canvas: HTMLCanvasElement,
-    private history: UsageHistory,
+    private history: GraphSource,
   ) {
     this.mode = localStorage.getItem(MODE_KEY) === "weekly" ? "weekly" : "session";
     canvas.title = "Right-click: switch 5h / 7d";
@@ -47,6 +52,12 @@ export class UsageGraph {
 
   update(s: UsageSnapshot): void {
     this.snapshot = s;
+    this.draw();
+  }
+
+  /** Swap the sample source (dev mock mode). */
+  setHistory(h: GraphSource): void {
+    this.history = h;
     this.draw();
   }
 
@@ -77,10 +88,20 @@ export class UsageGraph {
     ctx.font = "400 14px Grotesk, sans-serif";
     ctx.fillStyle = DIM;
     ctx.textBaseline = "top";
-    ctx.fillText(cfg.label, PAD, PAD + 6); // sits below the ceiling line
+    ctx.fillText(cfg.label, PAD, PAD + 4);
 
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+
+    // Faint quarter gridlines give the empty space some structure.
+    ctx.strokeStyle = TRACK;
+    ctx.lineWidth = 1;
+    for (const pct of [25, 50, 75]) {
+      ctx.beginPath();
+      ctx.moveTo(PAD, y(pct));
+      ctx.lineTo(w - PAD, y(pct));
+      ctx.stroke();
+    }
 
     // Ghost of the previous window, time-shifted onto the same axes.
     const ghost = this.history
@@ -109,12 +130,15 @@ export class UsageGraph {
       ctx.lineTo(x(end), y(100));
       ctx.stroke();
     }
+    // The limit reads as a red gridline, not a frame around the panel.
     ctx.strokeStyle = RED;
-    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(PAD, y(100));
     ctx.lineTo(w - PAD, y(100));
     ctx.stroke();
+    ctx.globalAlpha = 1;
     if (!win) return;
 
     // The line's colour follows its height: green low, blending through
@@ -126,6 +150,22 @@ export class UsageGraph {
 
     const pts = this.history.points(cfg.key, start).filter((p) => p.ms <= now);
     pts.push({ ms: Math.min(now, end), pct: win.utilization });
+
+    // Soft area fill anchors the line to the baseline.
+    if (pts.length >= 2) {
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      pts.forEach((p, i) =>
+        i === 0 ? ctx.moveTo(x(p.ms), y(p.pct)) : ctx.lineTo(x(p.ms), y(p.pct)),
+      );
+      ctx.lineTo(x(pts[pts.length - 1].ms), y(0));
+      ctx.lineTo(x(pts[0].ms), y(0));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
 
     ctx.lineWidth = 3;
     this.strokePolyline(ctx, pts, gradient, x, y);
@@ -142,6 +182,13 @@ export class UsageGraph {
       this.strokePolyline(ctx, proj, gradient, x, y);
       ctx.setLineDash([]);
     }
+
+    // A bright "now" marker at the end of the live line.
+    const cur = pts[pts.length - 1];
+    ctx.fillStyle = TEXT;
+    ctx.beginPath();
+    ctx.arc(x(cur.ms), y(cur.pct), 2.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   private strokePolyline(
