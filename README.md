@@ -1,81 +1,139 @@
+<div align="center">
+
 # clordgauge
 
-A small desktop tray widget that shows your Claude Code usage (5-hour and 7-day
-windows). Built with [Tauri 2](https://tauri.app/) — a Rust backend (`src-tauri/`)
-and a vanilla TypeScript/Vite frontend (`src/`).
+**A tiny desktop widget that keeps your Claude Code usage in sight — with a pixel-art coworker.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app/)
+![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)
+
+<!-- TODO: hero screenshot — widget in the default layout (mascot + tiles), on a desktop -->
+<img src="docs/hero.png" alt="clordgauge widget showing the mascot and usage tiles" width="480" />
+
+</div>
 
 > **Unofficial.** clordgauge is a community-built tool. It is not affiliated
 > with, endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code" are
 > trademarks of Anthropic.
 
-## What it does
+## Features
 
-A frameless, always-available widget that lives in your system tray:
+- **Live usage at a glance** — the current **5-hour** session and rolling
+  **7-day** window, each with a threshold-coloured percentage and reset
+  countdown, polled once a minute from your existing Claude Code login. No
+  separate sign-in.
+- **A mascot that works when you do** — pixel-art animations speed up with
+  your usage rate. Pick **Clawd**, an **Axolotl**, or a **Cat**.
+- **Usage graph with a forecast** — click the mascot to flip it into a
+  usage-over-time graph: gradient-coloured history, a dotted prediction at
+  your current pace, the limit ceiling, your reset time, and a faint ghost of
+  the previous window for comparison.
+- **Stays out of the way** — frameless, draggable, optionally pinned above
+  the taskbar, hidden to the tray when you don't want it.
+- **Six layouts** — mascot/graph beside, above, or below the tiles, or tiles
+  only.
 
-- An animated pixel-art mascot whose animations follow your usage rate, next to
-  two usage tiles — the current **5-hour** session and the rolling **7-day**
-  window — each with a threshold-coloured percentage and reset countdown.
-  Pick between **Clawd** (default), an **Axolotl**, or a **Cat** from the tray
-  menu.
-- The tray icon's status bubble turns green/amber/red with your usage, and its
-  tooltip shows the live percentages.
-- **Drag** the widget to move it; hover for pin / refresh / hide controls.
-- Six layouts — mascot left/right/top/bottom of the tiles, or tiles only
-  (wide/tall) — picked from the tray menu.
-- Tray menu: show/hide, layout, mascot, pin on top, start at login, refresh now,
-  quit.
+## Showcase
 
-It reads your existing Claude Code login (see below) and polls the usage API
-once a minute — no separate sign-in.
+<!-- TODO: capture these. Suggested specs: GIFs ~480px wide, a few seconds, looping. -->
 
-## Platform support
+| Mascots at work | Usage graph |
+| :---: | :---: |
+| <!-- TODO: gif cycling Clawd / Axolotl / Cat animations --> <img src="docs/mascots.gif" alt="The three mascots animating" width="360" /> | <!-- TODO: screenshot of the graph with history, prediction and ghost line --> <img src="docs/graph.png" alt="Usage graph with prediction" width="360" /> |
 
-Runs on **macOS, Windows, and Linux**, and can be developed on any of them.
+| Animations follow your usage rate | Layouts |
+| :---: | :---: |
+| <!-- TODO: gif of the mascot going from idle to heavy-use animations --> <img src="docs/usage-rate.gif" alt="Mascot animation speeding up with usage" width="360" /> | <!-- TODO: screenshot grid of the six layouts --> <img src="docs/layouts.png" alt="The six widget layouts" width="360" /> |
 
-A few platform details handled by the code:
+## Controls
 
-- **Credentials.** The poller reads the Claude Code OAuth token fresh on every
-  poll. On **macOS** it reads from the login Keychain (`security
-  find-generic-password -s "Claude Code-credentials"`); on **Windows/Linux** it
-  reads `~/.claude/.credentials.json` (with `%LOCALAPPDATA%`/`%APPDATA%`
-  fallbacks). See `src-tauri/src/credentials.rs`.
-- **Window transparency.** The transparent, undecorated widget window needs
-  Tauri's `macos-private-api` feature on macOS (`macOSPrivateApi: true` in
-  `tauri.conf.json` + the matching Cargo feature). It is inert on other
-  platforms. Note: a macOS build using this private API cannot ship on the Mac
-  App Store, which is fine for direct distribution.
-- **Bundles.** `bundle.targets` is `"all"`, so each host produces its own native
-  installers (NSIS/MSI on Windows, `.app`/`.dmg` on macOS, deb/AppImage/rpm on
-  Linux).
+| Action | What it does |
+| --- | --- |
+| **Drag** the widget (or the ☰ handle) | Move it anywhere |
+| **Click** the mascot | Flip between mascot and usage graph |
+| **Right-click** the graph | Switch between the 5-hour and 7-day windows |
+| **Right-click** the mascot | Pick a mascot (Clawd / Axolotl / Cat) |
+| **Hover** | Reveal pin-on-top, refresh, and hide buttons |
+| **Tray menu** | Show/hide, layout, mascot, pin, start at login, refresh, quit |
 
-## Prerequisites
+The tray icon doubles as a status light — its bubble turns green/amber/red
+with your session usage, and the tooltip shows both live percentages.
+
+## How it works
+
+- **Credentials** — the poller reuses your Claude Code OAuth login, read fresh
+  on every poll. On **macOS** that's the login Keychain
+  (`Claude Code-credentials`); on **Windows/Linux** it's
+  `~/.claude/.credentials.json` (with `%LOCALAPPDATA%`/`%APPDATA%` fallbacks).
+  Nothing is stored or sent anywhere else.
+- **Usage** — Anthropic's OAuth usage endpoint is polled once a minute for the
+  utilization and reset time of both windows, with rate-limit headers from a
+  minimal API probe as a fallback.
+- **History** — the API only reports *current* utilization, so the widget
+  accumulates its own time series locally (in the WebView's localStorage) to
+  draw the graph: full resolution for recent hours, thinned to one sample per
+  five minutes beyond that, capped at 15 days — enough for each view to show a
+  ghost of its previous window.
+
+## Getting started
+
+### Prerequisites
 
 - Node.js + npm
-- Rust toolchain (`rustup`)
+- Rust toolchain ([`rustup`](https://rustup.rs/))
 - Platform build deps for Tauri — see the
   [Tauri prerequisites guide](https://tauri.app/start/prerequisites/)
-  (e.g. Xcode Command Line Tools on macOS, WebView2 + MSVC build tools on
-  Windows, `webkit2gtk` + friends on Linux).
+  (Xcode Command Line Tools on macOS, WebView2 + MSVC build tools on Windows,
+  `webkit2gtk` + friends on Linux)
 
-## Develop
+### Develop
 
 ```sh
 npm install
 npm run tauri dev
 ```
 
-## Build
+Or with [Task](https://taskfile.dev/): `task install`, then `task dev`.
+
+**Dev tips**
+
+- Press **M** in a dev build to toggle mocked usage data — a representative
+  set of curves (bursts, plateaus, a near-limit previous window) so you can
+  iterate on the graph without waiting for live history. Your real local
+  history is untouched.
+- `task test` runs the frontend (Vitest) and Rust test suites; `task check`
+  adds typechecking and linting.
+
+### Build
 
 ```sh
-npm run tauri build
+npm run tauri build   # or: task build
 ```
 
-Outputs land in `src-tauri/target/release/bundle/`.
+Native installers land in `src-tauri/target/release/bundle/` — NSIS/MSI on
+Windows, `.app`/`.dmg` on macOS, deb/AppImage/rpm on Linux.
+
+## Platform notes
+
+- **Window transparency** needs Tauri's `macos-private-api` feature on macOS
+  (already configured); it is inert elsewhere. A macOS build using this
+  private API cannot ship on the Mac App Store, which is fine for direct
+  distribution.
+- On **Windows**, a pinned widget re-asserts itself above the taskbar, which
+  shares the topmost z-band.
+
+## Credits
+
+- The **Clawd** pixel-art is derived from the community
+  [claudepix](https://claudepix.vercel.app/) set — thank you!
+- Typeface: [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk)
+  (SIL OFL 1.1).
 
 ## License
 
 [MIT](LICENSE).
 
-The bundled font (Space Grotesk) and pixel-art are redistributed under their
-own permissive licenses — see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `src/fonts/`.
+The bundled font and pixel-art are redistributed under their own permissive
+licenses — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
+`src/fonts/`.
