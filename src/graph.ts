@@ -4,7 +4,7 @@
 // switches between the 5-hour and 7-day windows.
 import type { UsageSnapshot } from "./api";
 import type { UsageHistory } from "./history";
-import { colorSegments, trendSlope, type Pt, type Run } from "./trend";
+import { trendSlope, type Pt } from "./trend";
 
 type Mode = "session" | "weekly";
 
@@ -16,7 +16,8 @@ const MODE = {
 const MODE_KEY = "graph-mode";
 
 // Canvas can't resolve CSS variables; these mirror :root in styles.css.
-const BAND_COLORS = ["#788c5d", "#d97757", "#c0392b"];
+const GREEN = "#788c5d";
+const AMBER = "#d97757";
 const RED = "#c0392b";
 const DIM = "#b0aea5";
 
@@ -116,11 +117,18 @@ export class UsageGraph {
     ctx.stroke();
     if (!win) return;
 
+    // The line's colour follows its height: green low, blending through
+    // amber around the warning threshold to red at the limit.
+    const gradient = ctx.createLinearGradient(0, y(0), 0, y(100));
+    gradient.addColorStop(0, GREEN);
+    gradient.addColorStop(0.5, AMBER);
+    gradient.addColorStop(0.85, RED);
+
     const pts = this.history.points(cfg.key, start).filter((p) => p.ms <= now);
     pts.push({ ms: Math.min(now, end), pct: win.utilization });
 
     ctx.lineWidth = 3;
-    this.strokeRuns(ctx, colorSegments(pts), x, y);
+    this.strokePolyline(ctx, pts, gradient, x, y);
 
     const slope = trendSlope(pts, cfg.trendMs, now);
     if (win.resetAt && slope !== null && now < end) {
@@ -131,32 +139,31 @@ export class UsageGraph {
       if (fullAt < end) proj.push({ ms: fullAt, pct: 100 }, { ms: end, pct: 100 });
       else proj.push({ ms: end, pct: cur + rise * (end - now) });
       ctx.setLineDash([1, 6]);
-      this.strokeRuns(ctx, colorSegments(proj), x, y);
+      this.strokePolyline(ctx, proj, gradient, x, y);
       ctx.setLineDash([]);
     }
   }
 
-  private strokeRuns(
+  private strokePolyline(
     ctx: CanvasRenderingContext2D,
-    runs: Run[],
+    pts: Pt[],
+    style: CanvasGradient,
     x: (ms: number) => number,
     y: (pct: number) => number,
   ): void {
-    for (const run of runs) {
-      ctx.strokeStyle = BAND_COLORS[run.band];
-      if (run.pts.length === 1 && runs.length === 1) {
-        // A lone sample has no line to stroke; mark it with a dot.
-        ctx.fillStyle = BAND_COLORS[run.band];
-        ctx.beginPath();
-        ctx.arc(x(run.pts[0].ms), y(run.pts[0].pct), 2, 0, Math.PI * 2);
-        ctx.fill();
-        continue;
-      }
+    if (pts.length === 1) {
+      // A lone sample has no line to stroke; mark it with a dot.
+      ctx.fillStyle = style;
       ctx.beginPath();
-      run.pts.forEach((p, i) =>
-        i === 0 ? ctx.moveTo(x(p.ms), y(p.pct)) : ctx.lineTo(x(p.ms), y(p.pct)),
-      );
-      ctx.stroke();
+      ctx.arc(x(pts[0].ms), y(pts[0].pct), 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
     }
+    ctx.strokeStyle = style;
+    ctx.beginPath();
+    pts.forEach((p, i) =>
+      i === 0 ? ctx.moveTo(x(p.ms), y(p.pct)) : ctx.lineTo(x(p.ms), y(p.pct)),
+    );
+    ctx.stroke();
   }
 }
