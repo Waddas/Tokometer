@@ -4,7 +4,7 @@
 // switches between the 5-hour and 7-day windows.
 import type { UsageSnapshot } from "./api";
 import type { UsageHistory } from "./history";
-import { trendSlope, type Pt } from "./trend";
+import { trendSlope, projectUsage, type Pt } from "./trend";
 
 type Mode = "session" | "weekly";
 
@@ -31,6 +31,8 @@ const PAD = 8; // design px
 export class UsageGraph {
   private mode: Mode;
   private snapshot: UsageSnapshot | null = null;
+  // Weekdays the 7-day prediction ramps, indexed Sun..Sat; all-on until set.
+  private workDays: boolean[] = [true, true, true, true, true, true, true];
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -58,6 +60,12 @@ export class UsageGraph {
   /** Swap the sample source (dev mock mode). */
   setHistory(h: GraphSource): void {
     this.history = h;
+    this.draw();
+  }
+
+  /** Set which weekdays (Sun..Sat) the 7-day prediction ramps across. */
+  setWorkDays(days: boolean[]): void {
+    if (days.length === 7) this.workDays = days;
     this.draw();
   }
 
@@ -184,11 +192,13 @@ export class UsageGraph {
     const slope = trendSlope(pts, cfg.trendMs, now);
     if (win.resetAt && slope !== null && now < end) {
       const rise = Math.max(0, slope);
-      const cur = win.utilization;
-      const proj: Pt[] = [{ ms: now, pct: cur }];
-      const fullAt = rise > 0 ? now + (100 - cur) / rise : Infinity;
-      if (fullAt < end) proj.push({ ms: fullAt, pct: 100 }, { ms: end, pct: 100 });
-      else proj.push({ ms: end, pct: cur + rise * (end - now) });
+      // The work-day mask only shapes the weekly window; the 5h projection is
+      // intra-day, so it always ramps.
+      const isWorkDay =
+        this.mode === "weekly"
+          ? (ms: number) => this.workDays[new Date(ms).getDay()] !== false
+          : () => true;
+      const proj = projectUsage(now, end, win.utilization, rise, isWorkDay);
       ctx.setLineDash([1, 6]);
       this.strokePolyline(ctx, proj, gradient, x, y);
       ctx.setLineDash([]);

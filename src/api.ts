@@ -35,6 +35,8 @@ export interface AppStateSnapshot {
   pin: boolean;
   layout: Layout;
   mascot: Mascot;
+  /** Which weekdays the 7-day prediction ramps, indexed Sun..Sat. */
+  workDays: boolean[];
   lastUsage: UsageSnapshot | null;
 }
 
@@ -42,6 +44,8 @@ export interface StateChange {
   pin: boolean;
   layout: Layout;
   mascot: Mascot;
+  /** Which weekdays the 7-day prediction ramps, indexed Sun..Sat. */
+  workDays: boolean[];
   visible: boolean;
 }
 

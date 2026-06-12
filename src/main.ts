@@ -176,6 +176,7 @@ void api.onStateChange((s) => {
   applyLayout(s.layout);
   splash.setMascot(s.mascot);
   markMascot(s.mascot);
+  graph.setWorkDays(s.workDays);
 });
 
 void api.getState().then((st) => {
@@ -184,6 +185,7 @@ void api.getState().then((st) => {
   applyLayout(st.layout);
   splash.setMascot(st.mascot);
   markMascot(st.mascot);
+  graph.setWorkDays(st.workDays);
   if (st.lastUsage) {
     lastReal = st.lastUsage;
     if (!mockActive) applySnapshot(st.lastUsage);

@@ -96,7 +96,14 @@ impl Mascot {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Which weekdays count as "work days", indexed Sun..Sat to match the
+/// frontend's `Date.getDay()`. Unchecked days hold the 7-day prediction flat
+/// (no usage expected), so the dotted line doesn't extrapolate across them.
+pub fn all_work_days() -> [bool; 7] {
+    [true; 7]
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PersistedState {
     /// Logical (DPI-independent) window position.
@@ -104,7 +111,25 @@ pub struct PersistedState {
     pub pin: bool,
     pub layout: Layout,
     pub mascot: Mascot,
+    /// All-true by default; a plain derive would flatten the whole prediction.
+    #[serde(default = "all_work_days")]
+    pub work_days: [bool; 7],
     pub last_usage: Option<UsageSnapshot>,
+}
+
+// Hand-written so `work_days` defaults to all-true; `#[derive(Default)]` and
+// serde's field default both leave it `[false; 7]`, flattening the prediction.
+impl Default for PersistedState {
+    fn default() -> Self {
+        Self {
+            window: None,
+            pin: false,
+            layout: Layout::default(),
+            mascot: Mascot::default(),
+            work_days: all_work_days(),
+            last_usage: None,
+        }
+    }
 }
 
 pub struct AppState(pub Mutex<PersistedState>);
@@ -219,6 +244,9 @@ mod tests {
         assert!(!s.pin);
         assert_eq!(s.layout, Layout::MascotLeft);
         assert_eq!(s.mascot, Mascot::Clawd);
+        // All-true, not the [false; 7] a plain field default would give —
+        // otherwise an old state.json (no workDays key) flattens the prediction.
+        assert_eq!(s.work_days, [true; 7]);
         assert!(s.window.is_none());
         assert!(s.last_usage.is_none());
     }
@@ -230,6 +258,7 @@ mod tests {
             pin: true,
             layout: Layout::TilesRow,
             mascot: Mascot::Axolotl,
+            work_days: [true, false, true, true, true, true, false],
             last_usage: None,
         };
         let json = serde_json::to_string(&original).unwrap();
@@ -237,6 +266,7 @@ mod tests {
         assert_eq!(back.pin, original.pin);
         assert_eq!(back.layout, original.layout);
         assert_eq!(back.mascot, original.mascot);
+        assert_eq!(back.work_days, original.work_days);
         assert_eq!(back.window.unwrap().x, 12.0);
     }
 

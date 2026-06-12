@@ -75,6 +75,7 @@ pub fn run() {
             let pin = persisted.pin;
             let layout = persisted.layout;
             let mascot = persisted.mascot;
+            let work_days = persisted.work_days;
             let saved_pos = persisted.window;
             app.manage(state::AppState(Mutex::new(persisted)));
 
@@ -92,7 +93,7 @@ pub fn run() {
             let (w, h) = layout.window_size();
             let _ = win.set_size(tauri::LogicalSize::new(w, h));
 
-            tray::create(&handle, pin, layout, mascot)?;
+            tray::create(&handle, pin, layout, mascot, work_days)?;
             let _ = win.show();
 
             let event_win = win.clone();

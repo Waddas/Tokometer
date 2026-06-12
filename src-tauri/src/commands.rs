@@ -8,7 +8,13 @@ use crate::state::{AppState, Layout, Mascot};
 #[tauri::command]
 pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
     let s = state.0.lock().unwrap();
-    json!({ "pin": s.pin, "layout": s.layout, "mascot": s.mascot, "lastUsage": s.last_usage })
+    json!({
+        "pin": s.pin,
+        "layout": s.layout,
+        "mascot": s.mascot,
+        "workDays": s.work_days,
+        "lastUsage": s.last_usage,
+    })
 }
 
 #[tauri::command]
@@ -89,5 +95,17 @@ pub fn apply_mascot(app: &AppHandle, mascot: Mascot) {
             let _ = item.set_checked(*m == mascot);
         }
     }
+    crate::tray::emit_state(app);
+}
+
+/// Single mutation path for a work-day toggle (`day` is Sun..Sat = 0..6).
+/// Unlike layout/mascot these are independent checkboxes, so the tray item is
+/// already in its new state when the event fires — we just persist and emit.
+pub fn apply_work_day(app: &AppHandle, day: usize, on: bool) {
+    if day >= 7 {
+        return;
+    }
+    app.state::<AppState>().0.lock().unwrap().work_days[day] = on;
+    crate::state::save(app);
     crate::tray::emit_state(app);
 }
