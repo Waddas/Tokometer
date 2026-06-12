@@ -104,16 +104,27 @@ export class UsageGraph {
     }
 
     // Ghost of the previous window, time-shifted onto the same axes.
-    const ghost = this.history
-      .points(cfg.key, start - cfg.windowMs)
-      .filter((p) => p.ms < start);
+    // Walk back up to 4 windows to find one with data (handles skipped windows).
+    let ghost: Pt[] = [];
+    let ghostShift = 0;
+    for (let n = 1; n <= 4; n++) {
+      const gStart = start - n * cfg.windowMs;
+      const candidates = this.history
+        .points(cfg.key, gStart)
+        .filter((p) => p.ms < gStart + cfg.windowMs);
+      if (candidates.length >= 2) {
+        ghost = candidates;
+        ghostShift = n * cfg.windowMs;
+        break;
+      }
+    }
     if (ghost.length >= 2) {
       ctx.strokeStyle = DIM;
       ctx.globalAlpha = 0.3;
       ctx.lineWidth = 2;
       ctx.beginPath();
       for (const [i, p] of ghost.entries()) {
-        const gx = x(p.ms + cfg.windowMs);
+        const gx = x(p.ms + ghostShift);
         if (i === 0) ctx.moveTo(gx, y(p.pct));
         else ctx.lineTo(gx, y(p.pct));
       }
