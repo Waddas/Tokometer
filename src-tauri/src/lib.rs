@@ -74,6 +74,7 @@ pub fn run() {
             let persisted = state::load(&handle);
             let pin = persisted.pin;
             let layout = persisted.layout;
+            let size = persisted.size;
             let mascot = persisted.mascot;
             let work_days = persisted.work_days;
             let saved_pos = persisted.window;
@@ -90,10 +91,10 @@ pub fn run() {
                 }
             }
             let _ = win.set_always_on_top(pin);
-            let (w, h) = layout.window_size();
+            let (w, h) = layout.window_size(size);
             let _ = win.set_size(tauri::LogicalSize::new(w, h));
 
-            tray::create(&handle, pin, layout, mascot, work_days)?;
+            tray::create(&handle, pin, layout, size, mascot, work_days)?;
             let _ = win.show();
 
             let event_win = win.clone();

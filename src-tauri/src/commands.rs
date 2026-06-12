@@ -3,7 +3,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::poller::RefreshSignal;
-use crate::state::{AppState, Layout, Mascot};
+use crate::state::{AppState, Layout, Mascot, Size};
 
 #[tauri::command]
 pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
@@ -71,15 +71,42 @@ pub fn apply_pin(app: &AppHandle, pinned: bool) {
 /// Single mutation path for the widget layout — resizes the window, persists,
 /// and syncs the tray's radio-style check items.
 pub fn apply_layout(app: &AppHandle, layout: Layout) {
+    let size = {
+        let state = app.state::<AppState>();
+        let mut s = state.0.lock().unwrap();
+        s.layout = layout;
+        s.size
+    };
     if let Some(win) = app.get_webview_window("main") {
-        let (w, h) = layout.window_size();
+        let (w, h) = layout.window_size(size);
         let _ = win.set_size(tauri::LogicalSize::new(w, h));
     }
-    app.state::<AppState>().0.lock().unwrap().layout = layout;
     crate::state::save(app);
     if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
         for (l, item) in &handles.layout_items {
             let _ = item.set_checked(*l == layout);
+        }
+    }
+    crate::tray::emit_state(app);
+}
+
+/// Single mutation path for the widget size — resizes the window for the
+/// current layout, persists, and syncs the tray's radio-style check items.
+pub fn apply_size(app: &AppHandle, size: Size) {
+    let layout = {
+        let state = app.state::<AppState>();
+        let mut s = state.0.lock().unwrap();
+        s.size = size;
+        s.layout
+    };
+    if let Some(win) = app.get_webview_window("main") {
+        let (w, h) = layout.window_size(size);
+        let _ = win.set_size(tauri::LogicalSize::new(w, h));
+    }
+    crate::state::save(app);
+    if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
+        for (s, item) in &handles.size_items {
+            let _ = item.set_checked(*s == size);
         }
     }
     crate::tray::emit_state(app);

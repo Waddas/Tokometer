@@ -4,7 +4,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, Tray
 use tauri::{AppHandle, Emitter, Manager, Wry};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::state::{Layout, Mascot};
+use crate::state::{Layout, Mascot, Size};
 use crate::usage::UsageSnapshot;
 
 pub struct TrayHandles {
@@ -13,6 +13,8 @@ pub struct TrayHandles {
     pub pin_item: CheckMenuItem<Wry>,
     /// Radio-style: exactly one is checked; apply_layout keeps them in sync.
     pub layout_items: Vec<(Layout, CheckMenuItem<Wry>)>,
+    /// Radio-style: exactly one is checked; apply_size keeps them in sync.
+    pub size_items: Vec<(Size, CheckMenuItem<Wry>)>,
     /// Radio-style: exactly one is checked; apply_mascot keeps them in sync.
     pub mascot_items: Vec<(Mascot, CheckMenuItem<Wry>)>,
     /// Independent checkboxes, keyed by Sun..Sat index (0..6).
@@ -40,6 +42,14 @@ fn layout_label(layout: Layout) -> &'static str {
         Layout::MascotBottom => "Display bottom",
         Layout::TilesRow => "Tiles only (wide)",
         Layout::TilesColumn => "Tiles only (tall)",
+    }
+}
+
+fn size_label(size: Size) -> &'static str {
+    match size {
+        Size::Small => "Small",
+        Size::Medium => "Medium",
+        Size::Large => "Large",
     }
 }
 
@@ -71,6 +81,7 @@ pub fn create(
     app: &AppHandle,
     pinned: bool,
     layout: Layout,
+    size: Size,
     mascot: Mascot,
     work_days: [bool; 7],
 ) -> tauri::Result<()> {
@@ -94,6 +105,23 @@ pub fn create(
     let layout_refs: Vec<&dyn IsMenuItem<Wry>> =
         layout_items.iter().map(|(_, item)| item as &dyn IsMenuItem<Wry>).collect();
     let layout_menu = Submenu::with_items(app, "Layout", true, &layout_refs)?;
+    let size_items: Vec<(Size, CheckMenuItem<Wry>)> = Size::ALL
+        .into_iter()
+        .map(|s| {
+            let item = CheckMenuItem::with_id(
+                app,
+                format!("size:{}", s.id()),
+                size_label(s),
+                true,
+                s == size,
+                None::<&str>,
+            )?;
+            Ok((s, item))
+        })
+        .collect::<tauri::Result<_>>()?;
+    let size_refs: Vec<&dyn IsMenuItem<Wry>> =
+        size_items.iter().map(|(_, item)| item as &dyn IsMenuItem<Wry>).collect();
+    let size_menu = Submenu::with_items(app, "Size", true, &size_refs)?;
     let mascot_items: Vec<(Mascot, CheckMenuItem<Wry>)> = Mascot::ALL
         .into_iter()
         .map(|m| {
@@ -141,6 +169,7 @@ pub fn create(
             &PredefinedMenuItem::separator(app)?,
             &show_hide,
             &layout_menu,
+            &size_menu,
             &mascot_menu,
             &work_days_menu,
             &pin_item,
@@ -170,6 +199,11 @@ pub fn create(
             id if id.starts_with("layout:") => {
                 if let Some(layout) = Layout::from_id(&id["layout:".len()..]) {
                     crate::commands::apply_layout(app, layout);
+                }
+            }
+            id if id.starts_with("size:") => {
+                if let Some(size) = Size::from_id(&id["size:".len()..]) {
+                    crate::commands::apply_size(app, size);
                 }
             }
             id if id.starts_with("mascot:") => {
@@ -223,6 +257,7 @@ pub fn create(
         status_item,
         pin_item,
         layout_items,
+        size_items,
         mascot_items,
         work_day_items,
         autostart_item,

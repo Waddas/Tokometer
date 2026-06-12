@@ -53,18 +53,62 @@ impl Layout {
         Self::ALL.into_iter().find(|l| l.id() == id)
     }
 
-    /// Logical window size: the layout's design space scaled by 2/3
-    /// (see the design-space dimensions in styles.css), plus the 28px
-    /// strip above the widget that hosts the hover controls.
-    pub fn window_size(self) -> (f64, f64) {
+    /// The layout's design-space dimensions (geometry in styles.css).
+    fn design_size(self) -> (f64, f64) {
+        match self {
+            Layout::MascotLeft | Layout::MascotRight => (282.0, 168.0),
+            Layout::MascotTop | Layout::MascotBottom => (238.0, 243.0),
+            Layout::TilesRow => (238.0, 93.0),
+            Layout::TilesColumn => (128.0, 168.0),
+        }
+    }
+
+    /// Logical window size: the layout's design space scaled by the chosen
+    /// `Size`, plus the 28px strip above the widget that hosts the hover
+    /// controls. The frontend recomputes `--scale` from the resized width.
+    pub fn window_size(self, size: Size) -> (f64, f64) {
         const CONTROLS_STRIP: f64 = 28.0;
-        let (w, h) = match self {
-            Layout::MascotLeft | Layout::MascotRight => (188.0, 112.0),
-            Layout::MascotTop | Layout::MascotBottom => (159.0, 162.0),
-            Layout::TilesRow => (159.0, 62.0),
-            Layout::TilesColumn => (85.0, 112.0),
-        };
-        (w, h + CONTROLS_STRIP)
+        let (w, h) = self.design_size();
+        let f = size.scale();
+        (w * f, h * f + CONTROLS_STRIP)
+    }
+}
+
+/// Overall widget scale. Small is the original 2/3 of the design space;
+/// Medium and Large step around it. The window resize alone drives the
+/// frontend's `--scale`, so the content fills whichever size is chosen.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Size {
+    #[default]
+    Small,
+    Medium,
+    Large,
+}
+
+impl Size {
+    pub const ALL: [Size; 3] = [Size::Small, Size::Medium, Size::Large];
+
+    /// Stable id; matches the serde kebab-case serialization.
+    pub fn id(self) -> &'static str {
+        match self {
+            Size::Small => "small",
+            Size::Medium => "medium",
+            Size::Large => "large",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Size> {
+        Self::ALL.into_iter().find(|s| s.id() == id)
+    }
+
+    /// Fraction of the design space the window occupies.
+    pub fn scale(self) -> f64 {
+        match self {
+            Size::Small => 2.0 / 3.0,
+            Size::Medium => 1.0,
+            Size::Large => 4.0 / 3.0,
+        }
     }
 }
 
@@ -110,6 +154,7 @@ pub struct PersistedState {
     pub window: Option<WindowPos>,
     pub pin: bool,
     pub layout: Layout,
+    pub size: Size,
     pub mascot: Mascot,
     /// All-true by default; a plain derive would flatten the whole prediction.
     #[serde(default = "all_work_days")]
@@ -125,6 +170,7 @@ impl Default for PersistedState {
             window: None,
             pin: false,
             layout: Layout::default(),
+            size: Size::default(),
             mascot: Mascot::default(),
             work_days: all_work_days(),
             last_usage: None,
@@ -198,11 +244,45 @@ mod tests {
     }
 
     #[test]
-    fn every_layout_has_a_positive_window_size() {
+    fn every_layout_has_a_positive_window_size_at_every_size() {
         for layout in Layout::ALL {
-            let (w, h) = layout.window_size();
-            assert!(w > 0.0 && h > 0.0, "{:?} has a non-positive size", layout);
+            for size in Size::ALL {
+                let (w, h) = layout.window_size(size);
+                assert!(w > 0.0 && h > 0.0, "{:?}/{:?} has a non-positive size", layout, size);
+            }
         }
+    }
+
+    #[test]
+    fn larger_sizes_make_larger_windows() {
+        for layout in Layout::ALL {
+            let (sw, sh) = layout.window_size(Size::Small);
+            let (mw, mh) = layout.window_size(Size::Medium);
+            let (lw, lh) = layout.window_size(Size::Large);
+            assert!(sw < mw && mw < lw, "{:?} width does not grow with size", layout);
+            assert!(sh < mh && mh < lh, "{:?} height does not grow with size", layout);
+        }
+    }
+
+    #[test]
+    fn small_keeps_the_original_two_thirds_scale() {
+        // The original window was the design space x 2/3; Small must match it
+        // so existing users see no change after upgrading.
+        let (w, h) = Layout::MascotLeft.window_size(Size::Small);
+        assert_eq!((w, h), (188.0, 112.0 + 28.0));
+    }
+
+    #[test]
+    fn size_id_round_trips_and_rejects_unknown() {
+        for size in Size::ALL {
+            assert_eq!(Size::from_id(size.id()), Some(size));
+        }
+        assert_eq!(Size::from_id("huge"), None);
+    }
+
+    #[test]
+    fn default_size_is_small() {
+        assert_eq!(Size::default(), Size::Small);
     }
 
     #[test]
@@ -243,6 +323,7 @@ mod tests {
         let s: PersistedState = serde_json::from_str("{}").unwrap();
         assert!(!s.pin);
         assert_eq!(s.layout, Layout::MascotLeft);
+        assert_eq!(s.size, Size::Small);
         assert_eq!(s.mascot, Mascot::Clawd);
         // All-true, not the [false; 7] a plain field default would give —
         // otherwise an old state.json (no workDays key) flattens the prediction.
@@ -257,6 +338,7 @@ mod tests {
             window: Some(WindowPos { x: 12.0, y: 34.0 }),
             pin: true,
             layout: Layout::TilesRow,
+            size: Size::Large,
             mascot: Mascot::Axolotl,
             work_days: [true, false, true, true, true, true, false],
             last_usage: None,
@@ -265,6 +347,7 @@ mod tests {
         let back: PersistedState = serde_json::from_str(&json).unwrap();
         assert_eq!(back.pin, original.pin);
         assert_eq!(back.layout, original.layout);
+        assert_eq!(back.size, original.size);
         assert_eq!(back.mascot, original.mascot);
         assert_eq!(back.work_days, original.work_days);
         assert_eq!(back.window.unwrap().x, 12.0);

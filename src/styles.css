@@ -105,7 +105,8 @@ body {
 
 /* ---- layouts ----
  * Shared grid: 14px margins, 10px gaps, 140px mascot, 100x65 tiles.
- * Each layout's design space is noted; the window is that x 2/3 (state.rs). */
+ * Each layout's design space is noted; the window is that scaled by the
+ * chosen Size — Small is x2/3 (state.rs). */
 
 /* mascot-left: 282x168 */
 .layout-mascot-left #mascot-chip {

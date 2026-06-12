@@ -23,8 +23,9 @@ const history = new UsageHistory();
 const graph = new UsageGraph(document.getElementById("graph") as HTMLCanvasElement, history);
 
 /* ---- layouts ----
- * Each layout has its own design-space width (geometry in styles.css);
- * the window is the design space scaled by 2/3 (sizes in Rust state.rs). */
+ * Each layout has its own design-space width (geometry in styles.css); the
+ * window is the design space scaled by the chosen Size (factors in state.rs).
+ * `--scale` is derived from the resized width, so any size fills correctly. */
 const DESIGN_WIDTH: Record<api.Layout, number> = {
   "mascot-left": 282,
   "mascot-right": 282,
