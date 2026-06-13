@@ -8,7 +8,6 @@
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app/)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)
 
-<!-- TODO: hero screenshot — widget in the default layout (mascot + tiles), on a desktop -->
 <img src="docs/hero.png" alt="clordgauge widget showing the mascot and usage tiles" width="480" />
 
 </div>
@@ -36,15 +35,13 @@
 
 ## Showcase
 
-<!-- TODO: capture these. Suggested specs: GIFs ~480px wide, a few seconds, looping. -->
-
 | Mascots at work | Usage graph |
 | :---: | :---: |
-| <!-- TODO: gif cycling Clawd / Axolotl / Cat animations --> <img src="docs/mascots.gif" alt="The three mascots animating" width="360" /> | <!-- TODO: screenshot of the graph with history, prediction and ghost line --> <img src="docs/graph.png" alt="Usage graph with prediction" width="360" /> |
+| <img src="docs/mascots.gif" alt="The three mascots animating" width="360" /> | <img src="docs/graph.png" alt="Usage graph with prediction" width="360" /> |
 
 | Animations follow your usage rate | Layouts |
 | :---: | :---: |
-| <!-- TODO: gif of the mascot going from idle to heavy-use animations --> <img src="docs/usage-rate.gif" alt="Mascot animation speeding up with usage" width="360" /> | <!-- TODO: screenshot grid of the six layouts --> <img src="docs/layouts.png" alt="The six widget layouts" width="360" /> |
+| <img src="docs/usage-rate.gif" alt="Mascot animation speeding up with usage" width="360" /> | <img src="docs/layouts.png" alt="The six widget layouts" width="360" /> |
 
 ## Controls
 
@@ -98,10 +95,14 @@ Or with [Task](https://taskfile.dev/): `task install`, then `task dev`.
 
 **Dev tips**
 
-- Press **M** in a dev build to toggle mocked usage data — a representative
-  set of curves (bursts, plateaus, a near-limit previous window) so you can
-  iterate on the graph without waiting for live history. Your real local
-  history is untouched.
+- Press **D** in a dev build to toggle dev mode — a small badge in the strip
+  above the widget shows the current state, and leaving dev mode resets it.
+  While it's on:
+  - **M** toggles mocked usage data — a representative set of curves (bursts,
+    plateaus, a near-limit previous window) so you can iterate on the graph
+    without waiting for live history. Your real local history is untouched.
+  - **A** pins the mascot to a specific animation, cycling through all of
+    them and back to the automatic rate-based rotation.
 - `task test` runs the frontend (Vitest) and Rust test suites; `task check`
   adds typechecking and linting.
 
