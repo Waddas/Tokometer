@@ -1,7 +1,14 @@
 {
-  "name": "clordgauge",
+  "name": "tokometer",
   "private": true,
   "version": "0.1.0",
+  "description": "A tiny desktop widget that keeps your Claude Code usage in sight — with a pixel-art coworker.",
+  "author": "Bradley Wadsworth <b.wadsworth@live.co.uk>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Waddas/Tokometer.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

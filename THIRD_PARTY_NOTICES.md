@@ -1,6 +1,6 @@
 # Third-party notices
 
-clordgauge bundles the following assets, redistributed under their own licenses.
+Tokometer bundles the following assets, redistributed under their own licenses.
 
 ## Fonts (`src/fonts/`)
 
@@ -15,6 +15,6 @@ clordgauge bundles the following assets, redistributed under their own licenses.
 
 ## Disclaimer
 
-clordgauge is an unofficial, community-built tool. It is not affiliated with,
+Tokometer is an unofficial, community-built tool. It is not affiliated with,
 endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code" are
 trademarks of Anthropic, used here only to describe interoperability.

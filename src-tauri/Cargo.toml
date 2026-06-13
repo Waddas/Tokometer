@@ -1,11 +1,11 @@
 [package]
-name = "clordgauge"
+name = "tokometer"
 version = "0.1.0"
-description = "Claude Code usage tray widget (Clawdmeter on the desktop)"
+description = "A tray widget that keeps your AI coding-agent usage in sight"
 edition = "2021"
 
 [lib]
-name = "clordgauge_lib"
+name = "tokometer_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

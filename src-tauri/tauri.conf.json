@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "clordgauge",
+  "productName": "Tokometer",
   "version": "0.1.0",
-  "identifier": "com.bradleywadsworth.clordgauge",
+  "identifier": "com.bradleywadsworth.tokometer",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "clordgauge",
+        "title": "Tokometer",
         "width": 188,
         "height": 140,
         "resizable": false,

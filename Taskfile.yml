@@ -1,4 +1,4 @@
-# Task runner for ClordGauge — https://taskfile.dev
+# Task runner for Tokometer — https://taskfile.dev
 # `task` uses a built-in POSIX-sh interpreter on every OS, so these run the
 # same on macOS, Windows, and Linux (see cross-platform constraint).
 version: "3"

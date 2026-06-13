@@ -18,7 +18,7 @@ pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(15))
-            .user_agent("clordgauge/0.1.0")
+            .user_agent("tokometer/0.1.0")
             .build()
             .expect("failed to build http client");
         loop {

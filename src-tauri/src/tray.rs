@@ -190,7 +190,7 @@ pub fn create(
 
     let tray = TrayIconBuilder::with_id("main")
         .icon(icon(TrayStatus::Busy))
-        .tooltip("clordgauge — starting…")
+        .tooltip("Tokometer — starting…")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event({
@@ -333,6 +333,6 @@ pub fn update(app: &AppHandle, snapshot: &UsageSnapshot) {
         )
     };
     let _ = handles.tray.set_icon(Some(icon(status)));
-    let _ = handles.tray.set_tooltip(Some(format!("clordgauge — {line}")));
+    let _ = handles.tray.set_tooltip(Some(format!("Tokometer — {line}")));
     let _ = handles.status_item.set_text(&line);
 }

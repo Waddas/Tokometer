@@ -1,6 +1,6 @@
 <div align="center">
 
-# clordgauge
+# Tokometer
 
 **A tiny desktop widget that keeps your Claude Code usage in sight — with a pixel-art coworker.**
 
@@ -8,11 +8,11 @@
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app/)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)
 
-<img src="docs/hero.png" alt="clordgauge widget showing the mascot and usage tiles" width="480" />
+<img src="docs/hero.png" alt="Tokometer widget showing the mascot and usage tiles" width="480" />
 
 </div>
 
-> **Unofficial.** clordgauge is a community-built tool. It is not affiliated
+> **Unofficial.** Tokometer is a community-built tool. It is not affiliated
 > with, endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code" are
 > trademarks of Anthropic.
 
