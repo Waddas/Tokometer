@@ -19,6 +19,7 @@ export class Splash {
   private anims: Record<string, ClawdAnimation> = MASCOTS[DEFAULT_MASCOT];
   private group = 0;
   private animIdx = 0;
+  private pinned: string | null = null;
   private frame = 0;
   private running = false;
   private frameTimer: ReturnType<typeof setTimeout> | null = null;
@@ -40,8 +41,22 @@ export class Splash {
   }
 
   private animation(): ClawdAnimation {
+    if (this.pinned && this.anims[this.pinned]) return this.anims[this.pinned];
     const names = this.groupNames();
     return this.anims[names[this.animIdx % names.length]];
+  }
+
+  /** All animation names for the current mascot. */
+  animationNames(): string[] {
+    return Object.keys(this.anims);
+  }
+
+  /** Pin a specific animation regardless of usage rate; null resumes the
+   *  automatic rate-grouped rotation. Dev/screenshot aid. */
+  setAnimation(name: string | null): void {
+    this.pinned = name;
+    this.frame = 0;
+    if (this.running) this.restartFrameLoop();
   }
 
   setGroup(group: number): void {
@@ -75,6 +90,7 @@ export class Splash {
   }
 
   private rotate(): void {
+    if (this.pinned) return;
     this.animIdx = (this.animIdx + 1) % this.groupNames().length;
     this.frame = 0;
     this.restartFrameLoop();

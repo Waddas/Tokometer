@@ -276,6 +276,25 @@ body:hover #controls {
   color: var(--accent);
 }
 
+/* ---- dev badge: shows while dev mode (D) is active (real pixels) ---- */
+#dev-badge {
+  position: absolute;
+  top: 6px;
+  left: 30px;
+  max-width: calc(100% - 38px);
+  height: 16px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(31, 31, 30, 0.85);
+  color: var(--dim);
+  font: 400 9px/16px Grotesk, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 9; /* hover controls win where they overlap */
+}
+
 /* ---- mascot picker (right-click menu, real pixels) ---- */
 #mascot-menu {
   position: fixed;

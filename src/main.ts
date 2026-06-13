@@ -153,14 +153,29 @@ void api.onUsage((s) => {
   if (!mockActive) applySnapshot(s);
 });
 
-/* ---- dev: press M to toggle mocked data ---- */
+/* ---- dev: D toggles dev mode, shown as a badge in the top strip. While on,
+ * M toggles mocked data and A cycles the mascot animation; leaving dev mode
+ * resets both. ---- */
 if (import.meta.env.DEV) {
-  window.addEventListener("keydown", (e) => {
-    if (e.key.toLowerCase() !== "m" || e.repeat) return;
-    void import("./mock").then(({ MockHistory }) => {
-      mockActive = !mockActive;
-      console.info(`mock data: ${mockActive ? "on" : "off"}`);
-      if (mockActive) {
+  let devMode = false;
+  let pinnedAnim = -1; // -1 = automatic rate-grouped rotation
+
+  const badge = document.createElement("div");
+  badge.id = "dev-badge";
+  badge.hidden = true;
+  document.body.appendChild(badge);
+
+  function renderBadge() {
+    badge.hidden = !devMode;
+    const anim = pinnedAnim === -1 ? "auto" : splash.animationNames()[pinnedAnim];
+    badge.textContent = `dev · ${mockActive ? "mock" : "live"} · ${anim}`;
+  }
+
+  const setMock = (on: boolean) =>
+    import("./mock").then(({ MockHistory }) => {
+      if (mockActive === on) return;
+      mockActive = on;
+      if (on) {
         const mock = new MockHistory();
         graph.setHistory(mock);
         applySnapshot(mock.snapshot);
@@ -168,7 +183,36 @@ if (import.meta.env.DEV) {
         graph.setHistory(history);
         if (lastReal) applySnapshot(lastReal);
       }
+      renderBadge();
     });
+
+  function setAnim(idx: number) {
+    pinnedAnim = idx;
+    splash.setAnimation(idx === -1 ? null : splash.animationNames()[idx]);
+    renderBadge();
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+    switch (e.key.toLowerCase()) {
+      case "d":
+        devMode = !devMode;
+        if (!devMode) {
+          void setMock(false);
+          setAnim(-1);
+        }
+        renderBadge();
+        break;
+      case "m":
+        if (devMode) void setMock(!mockActive);
+        break;
+      case "a":
+        if (devMode) {
+          const count = splash.animationNames().length;
+          setAnim(pinnedAnim + 1 >= count ? -1 : pinnedAnim + 1);
+        }
+        break;
+    }
   });
 }
 void api.onStateChange((s) => {
