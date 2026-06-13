@@ -8,7 +8,7 @@
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app/)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)
 
-<img src="docs/hero.png" alt="Tokometer widget showing the mascot and usage tiles" width="480" />
+<img src="docs/hero.png" alt="Tokometer widget showing the mascot and usage tiles" width="360" />
 
 </div>
 
