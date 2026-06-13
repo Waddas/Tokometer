@@ -70,6 +70,12 @@ pub fn run() {
             commands::set_autostart,
         ])
         .setup(|app| {
+            // Tray-only app: keep it out of the macOS Dock (matches Windows'
+            // skipTaskbar). Accessory apps have no Dock icon or menu bar but
+            // can still show windows.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let handle = app.handle().clone();
             let persisted = state::load(&handle);
             let pin = persisted.pin;
