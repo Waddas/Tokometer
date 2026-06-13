@@ -60,3 +60,7 @@ export const onUsage = (cb: (s: UsageSnapshot) => void): Promise<UnlistenFn> =>
 
 export const onStateChange = (cb: (s: StateChange) => void): Promise<UnlistenFn> =>
   listen<StateChange>("state://change", (e) => cb(e.payload));
+
+/** Dev/screenshot aid: tray toggle to hide the dev badge (debug builds only). */
+export const onDevBarHidden = (cb: (hidden: boolean) => void): Promise<UnlistenFn> =>
+  listen<boolean>("devbar://hidden", (e) => cb(e.payload));

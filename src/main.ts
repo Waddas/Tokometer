@@ -159,6 +159,7 @@ void api.onUsage((s) => {
 if (import.meta.env.DEV) {
   let devMode = false;
   let pinnedAnim = -1; // -1 = automatic rate-grouped rotation
+  let barHidden = false; // tray "Hide dev bar" — keeps dev mode on for captures
 
   const badge = document.createElement("div");
   badge.id = "dev-badge";
@@ -166,10 +167,15 @@ if (import.meta.env.DEV) {
   document.body.appendChild(badge);
 
   function renderBadge() {
-    badge.hidden = !devMode;
+    badge.hidden = !devMode || barHidden;
     const anim = pinnedAnim === -1 ? "auto" : splash.animationNames()[pinnedAnim];
     badge.textContent = `dev · ${mockActive ? "mock" : "live"} · ${anim}`;
   }
+
+  void api.onDevBarHidden((hidden) => {
+    barHidden = hidden;
+    renderBadge();
+  });
 
   const setMock = (on: boolean) =>
     import("./mock").then(({ MockHistory }) => {

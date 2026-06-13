@@ -162,30 +162,40 @@ pub fn create(
         CheckMenuItem::with_id(app, "autostart", "Start at login", true, autostart_on, None::<&str>)?;
     let refresh = MenuItem::with_id(app, "refresh", "Refresh now", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(
-        app,
-        &[
-            &status_item,
-            &PredefinedMenuItem::separator(app)?,
-            &show_hide,
-            &layout_menu,
-            &size_menu,
-            &mascot_menu,
-            &work_days_menu,
-            &pin_item,
-            &autostart_item,
-            &PredefinedMenuItem::separator(app)?,
-            &refresh,
-            &quit,
-        ],
-    )?;
+    // Dev/screenshot aid: hide the dev badge for clean captures. Debug builds
+    // only — release builds never draw the badge (see main.ts).
+    let hide_devbar = if cfg!(debug_assertions) {
+        Some(CheckMenuItem::with_id(app, "hide_devbar", "Hide dev bar", true, false, None::<&str>)?)
+    } else {
+        None
+    };
+    let sep_top = PredefinedMenuItem::separator(app)?;
+    let sep_bottom = PredefinedMenuItem::separator(app)?;
+    let mut items: Vec<&dyn IsMenuItem<Wry>> = vec![
+        &status_item,
+        &sep_top,
+        &show_hide,
+        &layout_menu,
+        &size_menu,
+        &mascot_menu,
+        &work_days_menu,
+        &pin_item,
+        &autostart_item,
+    ];
+    if let Some(item) = &hide_devbar {
+        items.push(item);
+    }
+    items.extend([&sep_bottom as &dyn IsMenuItem<Wry>, &refresh, &quit]);
+    let menu = Menu::with_items(app, &items)?;
 
     let tray = TrayIconBuilder::with_id("main")
         .icon(icon(TrayStatus::Busy))
         .tooltip("clordgauge — starting…")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id().as_ref() {
+        .on_menu_event({
+            let hide_devbar = hide_devbar.clone();
+            move |app, event| match event.id().as_ref() {
             "show_hide" => toggle_visibility(app),
             "pin" => {
                 // CheckMenuItem toggles itself before the event fires.
@@ -233,12 +243,19 @@ pub fn create(
                     .autostart_item
                     .set_checked(autolaunch.is_enabled().unwrap_or(false));
             }
+            "hide_devbar" => {
+                // CheckMenuItem toggles itself before the event fires; read it back.
+                if let Some(item) = &hide_devbar {
+                    let _ = app.emit("devbar://hidden", item.is_checked().unwrap_or(false));
+                }
+            }
             "refresh" => app.state::<crate::poller::RefreshSignal>().0.notify_one(),
             "quit" => {
                 crate::state::save(app);
                 app.exit(0);
             }
             _ => {}
+            }
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
