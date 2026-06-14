@@ -1,6 +1,6 @@
 [package]
 name = "tokometer"
-version = "0.1.0"
+version = "0.1.0" # x-release-please-version
 description = "A tray widget that keeps your AI coding-agent usage in sight"
 edition = "2021"
 
