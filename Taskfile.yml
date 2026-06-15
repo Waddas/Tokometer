@@ -28,6 +28,23 @@ tasks:
     cmds:
       - npm run dev
 
+  run:release:
+    desc: Build and launch the production app for the current platform
+    cmds:
+      # macOS must launch the bundled .app — the raw binary can't serve the
+      # webview's embedded asset protocol, so it renders blank.
+      - cmd: npm run tauri build -- --bundles app
+        platforms: [darwin]
+      - cmd: open "src-tauri/target/release/bundle/macos/Tokometer.app"
+        platforms: [darwin]
+      # Windows/Linux load the embedded assets fine from the raw binary.
+      - cmd: npm run tauri build -- --no-bundle
+        platforms: [windows, linux]
+      - cmd: cmd /c start "" "src-tauri\target\release\tokometer.exe"
+        platforms: [windows]
+      - cmd: ./src-tauri/target/release/tokometer
+        platforms: [linux]
+
   build:
     desc: Build the production Tauri bundle for the current platform
     cmds:
