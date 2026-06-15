@@ -126,6 +126,7 @@ Windows, `.app`/`.dmg` on macOS, deb/AppImage/rpm on Linux.
 
 ## Credits
 
+- Inspired by [Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter).
 - The **Clawd** pixel-art is derived from the community
   [claudepix](https://claudepix.vercel.app/) set — thank you!
 - Typeface: [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk)
