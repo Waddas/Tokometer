@@ -221,13 +221,13 @@ body {
   left: 8px;
   width: 18px;
   height: 18px;
-  padding-top: 2px; /* the glyph's ink sits high; optically center it */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 4px;
   background: rgba(31, 31, 30, 0.85);
   color: var(--accent);
-  font-size: 10px;
-  line-height: 1;
   cursor: grab;
   opacity: 0;
   transition: opacity 0.15s;
@@ -260,13 +260,24 @@ body:hover #controls {
 #controls button {
   width: 24px;
   height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 6px;
   background: rgba(31, 31, 30, 0.85);
   color: var(--dim);
-  font-size: 16px;
-  line-height: 1;
   cursor: pointer;
+}
+#drag-handle svg {
+  width: 14px;
+  height: 14px;
+  pointer-events: none; /* let the button own hover/click; * sets cursor on every element */
+}
+#controls button svg {
+  width: 15px;
+  height: 15px;
+  pointer-events: none;
 }
 #controls button:hover {
   background: var(--track);

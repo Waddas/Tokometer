@@ -6,11 +6,35 @@
     <title>Tokometer</title>
   </head>
   <body class="layout-mascot-left">
-    <button id="drag-handle" title="Drag to move">&#9776;</button>
+    <button id="drag-handle" title="Drag to move">
+      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+        <circle cx="9" cy="6" r="1.6" />
+        <circle cx="15" cy="6" r="1.6" />
+        <circle cx="9" cy="12" r="1.6" />
+        <circle cx="15" cy="12" r="1.6" />
+        <circle cx="9" cy="18" r="1.6" />
+        <circle cx="15" cy="18" r="1.6" />
+      </svg>
+    </button>
     <div id="controls">
-      <button id="btn-pin" title="Pin on top">&#9737;</button>
-      <button id="btn-refresh" title="Refresh now">&#8635;</button>
-      <button id="btn-hide" title="Hide (restore from tray)">&#215;</button>
+      <button id="btn-pin" title="Pin on top">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="7" />
+          <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+      <button id="btn-refresh" title="Refresh now">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="21 5 21 10 16 10" />
+          <path d="M19.4 15a8 8 0 1 1-1.9-9.4L21 10" />
+        </svg>
+      </button>
+      <button id="btn-hide" title="Hide (restore from tray)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="6" y1="6" x2="18" y2="18" />
+          <line x1="18" y1="6" x2="6" y2="18" />
+        </svg>
+      </button>
     </div>
     <div id="root">
       <div id="scaler">
