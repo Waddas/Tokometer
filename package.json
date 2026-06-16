@@ -1,7 +1,7 @@
 {
   "name": "tokometer",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A tiny desktop widget that keeps your Claude Code usage in sight — with a pixel-art coworker.",
   "author": "Bradley Wadsworth <b.wadsworth@live.co.uk>",
   "license": "MIT",
