@@ -3,6 +3,7 @@ mod credentials;
 mod poller;
 mod state;
 mod tray;
+mod trayicon;
 mod update;
 mod usage;
 

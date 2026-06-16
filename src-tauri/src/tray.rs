@@ -1,4 +1,3 @@
-use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Wry};
@@ -59,22 +58,6 @@ fn mascot_label(mascot: Mascot) -> &'static str {
         Mascot::Axolotl => "Axolotl",
         Mascot::Cat => "Cat",
     }
-}
-
-#[derive(Clone, Copy)]
-pub enum TrayStatus {
-    Ok,
-    Busy,
-    Error,
-}
-
-fn icon(status: TrayStatus) -> Image<'static> {
-    let bytes: &[u8] = match status {
-        TrayStatus::Ok => include_bytes!("../icons/tray-ok.png"),
-        TrayStatus::Busy => include_bytes!("../icons/tray-busy.png"),
-        TrayStatus::Error => include_bytes!("../icons/tray-error.png"),
-    };
-    Image::from_bytes(bytes).expect("embedded tray icon is valid png")
 }
 
 pub fn create(
@@ -191,7 +174,8 @@ pub fn create(
     let menu = Menu::with_items(app, &items)?;
 
     let tray = TrayIconBuilder::with_id("main")
-        .icon(icon(TrayStatus::Busy))
+        .icon(crate::trayicon::unknown())
+        .icon_as_template(true)
         .tooltip("Tokometer — starting…")
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -318,24 +302,30 @@ pub fn emit_state(app: &AppHandle) {
     );
 }
 
-/// Reflect the latest poll result in the tray: bubble color, tooltip, status line.
+/// Reflect the latest poll result in the tray: the 5h percentage (or a flat
+/// gauge glyph when unknown), tooltip, and status line.
 pub fn update(app: &AppHandle, snapshot: &UsageSnapshot) {
     let Some(handles) = app.try_state::<TrayHandles>() else { return };
-    let (status, line) = if snapshot.status == "ok" {
-        let pct = |w: &Option<crate::usage::UsageWindow>| {
-            w.as_ref().map(|w| w.utilization).unwrap_or(0.0)
+    let pct = |w: &Option<crate::usage::UsageWindow>| w.as_ref().map(|w| w.utilization);
+
+    let (icon, line) = if snapshot.status == "ok" {
+        let five = pct(&snapshot.five_hour);
+        let fmt = |p: Option<f64>| p.map(|p| format!("{p:.0}%")).unwrap_or_else(|| "--".into());
+        let line = format!("5h {} • 7d {}", fmt(five), fmt(pct(&snapshot.seven_day)));
+        let icon = match five {
+            Some(p) => crate::trayicon::labelled("5h", &format!("{p:.0}%")),
+            None => crate::trayicon::unknown(),
         };
-        (
-            TrayStatus::Ok,
-            format!("5h {:.0}% • 7d {:.0}%", pct(&snapshot.five_hour), pct(&snapshot.seven_day)),
-        )
+        (icon, line)
     } else {
         (
-            TrayStatus::Error,
+            crate::trayicon::unknown(),
             snapshot.error.clone().unwrap_or_else(|| "error".into()),
         )
     };
-    let _ = handles.tray.set_icon(Some(icon(status)));
+
+    // Re-assert the template flag each time: plain set_icon would clear it.
+    let _ = handles.tray.set_icon_with_as_template(Some(icon), true);
     let _ = handles.tray.set_tooltip(Some(format!("Tokometer — {line}")));
     let _ = handles.status_item.set_text(&line);
 }
