@@ -1,0 +1,51 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tokometer logo">
+  <title>Tokometer</title>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2a2a28"/>
+      <stop offset="1" stop-color="#1f1f1e"/>
+    </linearGradient>
+    <linearGradient id="needle" x1="228" y1="291" x2="361" y2="199" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c4603f"/>
+      <stop offset="1" stop-color="#e98a68"/>
+    </linearGradient>
+    <radialGradient id="hub" cx="0.4" cy="0.35" r="0.8">
+      <stop offset="0" stop-color="#faf9f5"/>
+      <stop offset="1" stop-color="#cfcdc4"/>
+    </radialGradient>
+  </defs>
+
+  <!-- App-icon background -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
+  <rect x="16.5" y="16.5" width="479" height="479" rx="111.5" fill="none" stroke="#3a3a37" stroke-width="1"/>
+
+  <!-- Gauge track (unlit base ring) -->
+  <path d="M 149.93 378.07 A 150 150 0 1 1 362.07 378.07"
+        fill="none" stroke="#34342f" stroke-width="34" stroke-linecap="round"/>
+
+  <!-- Coloured usage arc: green -> amber -> red -->
+  <g fill="none" stroke-width="34" stroke-linecap="round">
+    <!-- green: 135deg -> 305deg -->
+    <path d="M 149.93 378.07 A 150 150 0 0 1 342.04 149.13" stroke="#788c5d"/>
+    <!-- amber: 305deg -> 360deg -->
+    <path d="M 342.04 149.13 A 150 150 0 0 1 406 272" stroke="#d97757"/>
+    <!-- red: 360deg -> 405deg -->
+    <path d="M 406 272 A 150 150 0 0 1 362.07 378.07" stroke="#c0392b"/>
+  </g>
+
+  <!-- Graduation ticks across the band -->
+  <g stroke="#faf9f5" stroke-opacity="0.55" stroke-width="5" stroke-linecap="round">
+    <line x1="132.20" y1="220.72" x2="102.64" y2="208.47"/>
+    <line x1="256"    y1="138"    x2="256"    y2="106"/>
+    <line x1="379.80" y1="220.72" x2="409.36" y2="208.47"/>
+  </g>
+
+  <!-- Needle pointing into the amber zone -->
+  <polygon points="360.86,198.58 261.16,279.37 228.15,291.50 250.84,264.63"
+           fill="url(#needle)"/>
+
+  <!-- Hub -->
+  <circle cx="256" cy="272" r="26" fill="url(#hub)"/>
+  <circle cx="256" cy="272" r="11" fill="#1f1f1e"/>
+</svg>
