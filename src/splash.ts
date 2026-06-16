@@ -1,6 +1,6 @@
 // Pixel-art mascot splash — canvas port of the firmware's splash.cpp:
 // 20x20 palette-indexed frames, grouped by usage rate, rotating every 20s.
-import { type ClawdAnimation } from "./animations";
+import { type MascotAnimation } from "./animations";
 import { MASCOTS, DEFAULT_MASCOT, type MascotId } from "./mascots";
 
 // GROUP_NAMES from splash.cpp, verbatim.
@@ -16,7 +16,7 @@ const GRID = 20;
 export class Splash {
   private ctx: CanvasRenderingContext2D;
   private cell: number;
-  private anims: Record<string, ClawdAnimation> = MASCOTS[DEFAULT_MASCOT];
+  private anims: Record<string, MascotAnimation> = MASCOTS[DEFAULT_MASCOT];
   private group = 0;
   private animIdx = 0;
   private pinned: string | null = null;
@@ -40,7 +40,7 @@ export class Splash {
     return Object.keys(this.anims);
   }
 
-  private animation(): ClawdAnimation {
+  private animation(): MascotAnimation {
     if (this.pinned && this.anims[this.pinned]) return this.anims[this.pinned];
     const names = this.groupNames();
     return this.anims[names[this.animIdx % names.length]];
