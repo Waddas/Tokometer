@@ -17,9 +17,7 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "convert:animations": "node tools/convert_animations.mjs",
-    "gen:icons": "node tools/gen_icons.mjs"
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0"
