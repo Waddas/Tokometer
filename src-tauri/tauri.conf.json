@@ -36,6 +36,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -44,5 +45,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDkxMkQ4MUM1NEYxNzI4QjQKUldTMEtCZFB4WUV0a1FZUi9NMmJyamd2OHFGWHFXN2ZDQ0dwQndseU90YTZRUENtNm83NHZuNzIK",
+      "endpoints": [
+        "https://github.com/Waddas/Tokometer/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

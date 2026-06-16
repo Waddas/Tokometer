@@ -161,6 +161,8 @@ pub fn create(
     let autostart_item =
         CheckMenuItem::with_id(app, "autostart", "Start at login", true, autostart_on, None::<&str>)?;
     let refresh = MenuItem::with_id(app, "refresh", "Refresh now", true, None::<&str>)?;
+    let check_updates =
+        MenuItem::with_id(app, "check_updates", "Check for updates…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     // Dev/screenshot aid: hide the dev badge for clean captures. Debug builds
     // only — release builds never draw the badge (see main.ts).
@@ -185,7 +187,7 @@ pub fn create(
     if let Some(item) = &hide_devbar {
         items.push(item);
     }
-    items.extend([&sep_bottom as &dyn IsMenuItem<Wry>, &refresh, &quit]);
+    items.extend([&sep_bottom as &dyn IsMenuItem<Wry>, &refresh, &check_updates, &quit]);
     let menu = Menu::with_items(app, &items)?;
 
     let tray = TrayIconBuilder::with_id("main")
@@ -250,6 +252,7 @@ pub fn create(
                 }
             }
             "refresh" => app.state::<crate::poller::RefreshSignal>().0.notify_one(),
+            "check_updates" => crate::update::spawn_check(app.clone()),
             "quit" => {
                 crate::state::save(app);
                 app.exit(0);

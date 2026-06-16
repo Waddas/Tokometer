@@ -3,6 +3,7 @@ mod credentials;
 mod poller;
 mod state;
 mod tray;
+mod update;
 mod usage;
 
 use std::sync::{Arc, Mutex};
@@ -59,6 +60,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(poller::RefreshSignal(Arc::new(Notify::new())))
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
@@ -152,6 +154,7 @@ pub fn run() {
             }
 
             poller::spawn(handle);
+            update::spawn_startup_check(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())
