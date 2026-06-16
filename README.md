@@ -4,6 +4,8 @@
 
 **A tiny desktop widget that keeps your Claude Code usage in sight — with a pixel-art coworker.**
 
+[![CI](https://github.com/Waddas/Tokometer/actions/workflows/ci.yml/badge.svg)](https://github.com/Waddas/Tokometer/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/Waddas/Tokometer?display_name=tag&sort=semver)](https://github.com/Waddas/Tokometer/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app/)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)
@@ -73,6 +75,24 @@ with your session usage, and the tooltip shows both live percentages.
   five minutes beyond that, capped at 15 days — enough for each view to show a
   ghost of its previous window.
 
+## Install
+
+Grab the latest installer for your platform from the
+[**Releases**](https://github.com/Waddas/Tokometer/releases/latest) page:
+
+- **macOS** — `.dmg` (universal — Intel & Apple Silicon)
+- **Windows** — `.msi` or NSIS `.exe`
+- **Linux** — `.AppImage`, `.deb`, or `.rpm`
+
+Tokometer ships with an auto-updater, so you'll be prompted when a new version
+is available.
+
+> **macOS Gatekeeper / Windows SmartScreen:** the app isn't code-signed yet, so
+> your OS may warn on first launch. On macOS, right-click the app → **Open**; on
+> Windows, choose **More info → Run anyway**.
+
+Prefer to build it yourself? See [Getting started](#getting-started) below.
+
 ## Getting started
 
 ### Prerequisites
@@ -123,6 +143,14 @@ Windows, `.app`/`.dmg` on macOS, deb/AppImage/rpm on Linux.
   distribution.
 - On **Windows**, a pinned widget re-asserts itself above the taskbar, which
   shares the topmost z-band.
+
+## Contributing
+
+Contributions are welcome — bug reports, docs, new mascots, and features alike.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the development workflow and
+PR conventions, and please follow the
+[Code of Conduct](.github/CODE_OF_CONDUCT.md). Found a security issue? See the
+[Security Policy](.github/SECURITY.md).
 
 ## Credits
 
