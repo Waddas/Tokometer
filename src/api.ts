@@ -55,6 +55,10 @@ export const setPin = (pinned: boolean) => invoke<void>("set_pin", { pinned });
 export const setMascot = (mascot: Mascot) => invoke<void>("set_mascot", { mascot });
 export const toggleVisibility = () => invoke<void>("toggle_visibility");
 
+/** Dev/screenshot aid: mirror a mock snapshot in the tray icon (null clears it). */
+export const setTrayOverride = (snapshot: UsageSnapshot | null) =>
+  invoke<void>("set_tray_override", { snapshot });
+
 export const onUsage = (cb: (s: UsageSnapshot) => void): Promise<UnlistenFn> =>
   listen<UsageSnapshot>("usage://update", (e) => cb(e.payload));
 

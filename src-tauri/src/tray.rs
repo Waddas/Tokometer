@@ -1,10 +1,17 @@
+use std::sync::Mutex;
+
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Wry};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::state::{Layout, Mascot, Size};
+use crate::state::{Layout, Mascot, Size, TrayStyle};
 use crate::usage::UsageSnapshot;
+
+/// Dev/screenshot aid: a mock snapshot pushed from the frontend (see
+/// `set_tray_override`). While set, it overrides the live poll result so the
+/// tray matches the previewed widget. Always `None` in release.
+pub struct DevOverride(pub Mutex<Option<UsageSnapshot>>);
 
 pub struct TrayHandles {
     pub tray: TrayIcon,
@@ -16,6 +23,8 @@ pub struct TrayHandles {
     pub size_items: Vec<(Size, CheckMenuItem<Wry>)>,
     /// Radio-style: exactly one is checked; apply_mascot keeps them in sync.
     pub mascot_items: Vec<(Mascot, CheckMenuItem<Wry>)>,
+    /// Radio-style: exactly one is checked; apply_tray_style keeps them in sync.
+    pub tray_style_items: Vec<(TrayStyle, CheckMenuItem<Wry>)>,
     /// Independent checkboxes, keyed by Sun..Sat index (0..6).
     pub work_day_items: Vec<(usize, CheckMenuItem<Wry>)>,
     pub autostart_item: CheckMenuItem<Wry>,
@@ -60,12 +69,20 @@ fn mascot_label(mascot: Mascot) -> &'static str {
     }
 }
 
+fn tray_style_label(style: TrayStyle) -> &'static str {
+    match style {
+        TrayStyle::Ring => "Ring",
+        TrayStyle::Text => "Text",
+    }
+}
+
 pub fn create(
     app: &AppHandle,
     pinned: bool,
     layout: Layout,
     size: Size,
     mascot: Mascot,
+    tray_style: TrayStyle,
     work_days: [bool; 7],
 ) -> tauri::Result<()> {
     let status_item = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
@@ -122,6 +139,23 @@ pub fn create(
     let mascot_refs: Vec<&dyn IsMenuItem<Wry>> =
         mascot_items.iter().map(|(_, item)| item as &dyn IsMenuItem<Wry>).collect();
     let mascot_menu = Submenu::with_items(app, "Mascot", true, &mascot_refs)?;
+    let tray_style_items: Vec<(TrayStyle, CheckMenuItem<Wry>)> = TrayStyle::ALL
+        .into_iter()
+        .map(|st| {
+            let item = CheckMenuItem::with_id(
+                app,
+                format!("traystyle:{}", st.id()),
+                tray_style_label(st),
+                true,
+                st == tray_style,
+                None::<&str>,
+            )?;
+            Ok((st, item))
+        })
+        .collect::<tauri::Result<_>>()?;
+    let tray_style_refs: Vec<&dyn IsMenuItem<Wry>> =
+        tray_style_items.iter().map(|(_, item)| item as &dyn IsMenuItem<Wry>).collect();
+    let tray_style_menu = Submenu::with_items(app, "Tray icon", true, &tray_style_refs)?;
     // Independent checkboxes (not radio): which days the 7-day prediction ramps.
     let work_day_items: Vec<(usize, CheckMenuItem<Wry>)> = WORK_DAYS
         .into_iter()
@@ -163,6 +197,7 @@ pub fn create(
         &layout_menu,
         &size_menu,
         &mascot_menu,
+        &tray_style_menu,
         &work_days_menu,
         &pin_item,
         &autostart_item,
@@ -205,6 +240,11 @@ pub fn create(
             id if id.starts_with("mascot:") => {
                 if let Some(mascot) = Mascot::from_id(&id["mascot:".len()..]) {
                     crate::commands::apply_mascot(app, mascot);
+                }
+            }
+            id if id.starts_with("traystyle:") => {
+                if let Some(style) = TrayStyle::from_id(&id["traystyle:".len()..]) {
+                    crate::commands::apply_tray_style(app, style);
                 }
             }
             id if id.starts_with("workday:") => {
@@ -263,6 +303,7 @@ pub fn create(
         layout_items,
         size_items,
         mascot_items,
+        tray_style_items,
         work_day_items,
         autostart_item,
     });
@@ -306,26 +347,33 @@ pub fn emit_state(app: &AppHandle) {
 /// gauge glyph when unknown), tooltip, and status line.
 pub fn update(app: &AppHandle, snapshot: &UsageSnapshot) {
     let Some(handles) = app.try_state::<TrayHandles>() else { return };
+
+    // A dev override, when set, stands in for the live snapshot (see DevOverride).
+    let preview = app.try_state::<DevOverride>().and_then(|o| o.0.lock().unwrap().clone());
+    let snapshot = preview.as_ref().unwrap_or(snapshot);
+
+    let style = app.state::<crate::state::AppState>().0.lock().unwrap().tray_style;
     let pct = |w: &Option<crate::usage::UsageWindow>| w.as_ref().map(|w| w.utilization);
 
-    let (icon, line) = if snapshot.status == "ok" {
+    // `template` tints the icon to the macOS menubar (light/dark) — right for the
+    // monochrome text and unknown glyphs, but it would strip the ring's colour.
+    let (icon, template, line) = if snapshot.status == "ok" {
         let five = pct(&snapshot.five_hour);
         let fmt = |p: Option<f64>| p.map(|p| format!("{p:.0}%")).unwrap_or_else(|| "--".into());
         let line = format!("5h {} • 7d {}", fmt(five), fmt(pct(&snapshot.seven_day)));
-        let icon = match five {
-            Some(p) => crate::trayicon::labelled("5h", &format!("{p:.0}%")),
-            None => crate::trayicon::unknown(),
+        let (icon, template) = match (five, style) {
+            (Some(p), TrayStyle::Ring) => (crate::trayicon::gauge(p), false),
+            (Some(p), TrayStyle::Text) => (crate::trayicon::text("5h", p), true),
+            (None, _) => (crate::trayicon::unknown(), true),
         };
-        (icon, line)
+        (icon, template, line)
     } else {
-        (
-            crate::trayicon::unknown(),
-            snapshot.error.clone().unwrap_or_else(|| "error".into()),
-        )
+        let err = snapshot.error.clone().unwrap_or_else(|| "error".into());
+        (crate::trayicon::unknown(), true, err)
     };
 
     // Re-assert the template flag each time: plain set_icon would clear it.
-    let _ = handles.tray.set_icon_with_as_template(Some(icon), true);
+    let _ = handles.tray.set_icon_with_as_template(Some(icon), template);
     let _ = handles.tray.set_tooltip(Some(format!("Tokometer — {line}")));
     let _ = handles.status_item.set_text(&line);
 }

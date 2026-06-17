@@ -3,7 +3,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::poller::RefreshSignal;
-use crate::state::{AppState, Layout, Mascot, Size};
+use crate::state::{AppState, Layout, Mascot, Size, TrayStyle};
 
 #[tauri::command]
 pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
@@ -37,6 +37,24 @@ pub fn set_mascot(app: AppHandle, mascot: String) {
 #[tauri::command]
 pub fn toggle_visibility(app: AppHandle) {
     crate::tray::toggle_visibility(&app);
+}
+
+/// Dev/screenshot aid: mirror a mock snapshot in the tray (or clear it with
+/// `None`). The override wins over live polls until cleared, so the tray tracks
+/// the previewed widget. Release builds never invoke this (the mock UI is
+/// dev-only), so the override stays `None`.
+#[tauri::command]
+pub fn set_tray_override(app: AppHandle, snapshot: Option<crate::usage::UsageSnapshot>) {
+    *app.state::<crate::tray::DevOverride>().0.lock().unwrap() = snapshot;
+    // Re-render now. update() re-applies the override; fall back to the last live
+    // snapshot so clearing the override restores the real figure immediately.
+    let render = {
+        let ov = app.state::<crate::tray::DevOverride>().0.lock().unwrap().clone();
+        ov.or_else(|| app.state::<AppState>().0.lock().unwrap().last_usage.clone())
+    };
+    if let Some(snapshot) = render {
+        crate::tray::update(&app, &snapshot);
+    }
 }
 
 #[tauri::command]
@@ -123,6 +141,26 @@ pub fn apply_mascot(app: &AppHandle, mascot: Mascot) {
         }
     }
     crate::tray::emit_state(app);
+}
+
+/// Single mutation path for the tray icon style — persists, syncs the tray's
+/// radio-style check items, and re-renders the icon from the last poll result.
+pub fn apply_tray_style(app: &AppHandle, style: TrayStyle) {
+    let snapshot = {
+        let state = app.state::<AppState>();
+        let mut s = state.0.lock().unwrap();
+        s.tray_style = style;
+        s.last_usage.clone()
+    };
+    crate::state::save(app);
+    if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
+        for (st, item) in &handles.tray_style_items {
+            let _ = item.set_checked(*st == style);
+        }
+    }
+    if let Some(snapshot) = snapshot {
+        crate::tray::update(app, &snapshot);
+    }
 }
 
 /// Single mutation path for a work-day toggle (`day` is Sun..Sat = 0..6).
