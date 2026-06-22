@@ -48,6 +48,85 @@ fn cursor_over_window(win: &tauri::WebviewWindow) -> bool {
         && cursor.y < (pos.y + size.height as i32) as f64
 }
 
+/// A rectangle in physical screen pixels.
+#[derive(Clone, Copy)]
+struct ScreenRect {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+}
+
+impl ScreenRect {
+    fn right(self) -> i32 {
+        self.x + self.w
+    }
+
+    fn bottom(self) -> i32 {
+        self.y + self.h
+    }
+
+    fn intersects(self, other: ScreenRect) -> bool {
+        self.x < other.right()
+            && self.right() > other.x
+            && self.y < other.bottom()
+            && self.bottom() > other.y
+    }
+
+    fn center(self) -> (i64, i64) {
+        (self.x as i64 + self.w as i64 / 2, self.y as i64 + self.h as i64 / 2)
+    }
+}
+
+/// Where to place a window so it sits fully inside the nearest monitor's work
+/// area — but only when its current position overlaps none of them. Returns the
+/// clamped top-left in physical pixels, or `None` when the window is still
+/// (partly) visible and should stay where the user put it.
+fn fit_to_work_area(win: ScreenRect, work_areas: &[ScreenRect]) -> Option<(i32, i32)> {
+    if work_areas.iter().any(|a| a.intersects(win)) {
+        return None;
+    }
+    let (wx, wy) = win.center();
+    let nearest = work_areas.iter().min_by_key(|a| {
+        let (ax, ay) = a.center();
+        (ax - wx).pow(2) + (ay - wy).pow(2)
+    })?;
+    // Clamp the whole window inside the area, pinning it to the top-left corner
+    // if it is larger than the area in either axis.
+    let x = win.x.min(nearest.right() - win.w).max(nearest.x);
+    let y = win.y.min(nearest.bottom() - win.h).max(nearest.y);
+    Some((x, y))
+}
+
+/// Snap the widget into the nearest monitor's work area when its restored
+/// position has stranded it off-screen — the display it was saved on may have
+/// been unplugged or the monitor layout may have changed. The saved position is
+/// left untouched so the widget returns to its original spot if that monitor
+/// comes back.
+fn ensure_on_screen(win: &tauri::WebviewWindow) {
+    let (Ok(pos), Ok(size), Ok(monitors)) =
+        (win.outer_position(), win.outer_size(), win.available_monitors())
+    else {
+        return;
+    };
+    let work_areas: Vec<ScreenRect> = monitors
+        .iter()
+        .map(|m| {
+            let a = m.work_area();
+            ScreenRect {
+                x: a.position.x,
+                y: a.position.y,
+                w: a.size.width as i32,
+                h: a.size.height as i32,
+            }
+        })
+        .collect();
+    let win_rect = ScreenRect { x: pos.x, y: pos.y, w: size.width as i32, h: size.height as i32 };
+    if let Some((x, y)) = fit_to_work_area(win_rect, &work_areas) {
+        let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -92,19 +171,22 @@ pub fn run() {
             let saved_pos = persisted.window;
             app.manage(state::AppState(Mutex::new(persisted)));
 
-            // Restore position before showing so the window never flashes at the default spot.
+            // Restore size before position so the off-screen guard measures the
+            // real window bounds; do both before showing so the window never
+            // flashes at the default spot.
             let win = app.get_webview_window("main").expect("main window");
+            let (w, h) = layout.window_size(size);
+            let _ = win.set_size(tauri::LogicalSize::new(w, h));
             match saved_pos {
                 Some(pos) => {
                     let _ = win.set_position(tauri::LogicalPosition::new(pos.x, pos.y));
+                    ensure_on_screen(&win);
                 }
                 None => {
                     let _ = win.center();
                 }
             }
             let _ = win.set_always_on_top(pin);
-            let (w, h) = layout.window_size(size);
-            let _ = win.set_size(tauri::LogicalSize::new(w, h));
 
             tray::create(&handle, pin, layout, size, mascot, tray_style, work_days)?;
             let _ = win.show();
@@ -169,4 +251,51 @@ pub fn run() {
             state::save(app);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fit_to_work_area, ScreenRect};
+
+    fn rect(x: i32, y: i32, w: i32, h: i32) -> ScreenRect {
+        ScreenRect { x, y, w, h }
+    }
+
+    #[test]
+    fn leaves_a_window_that_overlaps_a_work_area() {
+        let areas = [rect(0, 0, 2560, 1440)];
+        // Fully inside.
+        assert_eq!(fit_to_work_area(rect(100, 100, 188, 140), &areas), None);
+        // Straddling an edge still counts as visible.
+        assert_eq!(fit_to_work_area(rect(-50, 100, 188, 140), &areas), None);
+    }
+
+    #[test]
+    fn snaps_a_fully_offscreen_window_to_the_work_area_edge() {
+        let areas = [rect(0, 0, 2560, 1440)];
+        // Off the left edge: clamp x to the left, keep y.
+        assert_eq!(fit_to_work_area(rect(-300, 200, 188, 140), &areas), Some((0, 200)));
+        // Off the bottom: clamp y to (bottom - height), keep x.
+        assert_eq!(fit_to_work_area(rect(200, 1500, 188, 140), &areas), Some((200, 1300)));
+    }
+
+    #[test]
+    fn picks_the_nearest_monitor_when_several_are_connected() {
+        // Regression: a widget saved on a now-unplugged left monitor (negative x)
+        // must land on the primary monitor it is closest to, not the far one.
+        let primary = rect(0, 24, 2560, 1368);
+        let right = rect(2560, 24, 2560, 1368);
+        assert_eq!(fit_to_work_area(rect(-245, 688, 188, 140), &[primary, right]), Some((0, 688)));
+    }
+
+    #[test]
+    fn pins_to_the_corner_when_the_window_is_larger_than_the_area() {
+        let areas = [rect(0, 0, 100, 100)];
+        assert_eq!(fit_to_work_area(rect(-500, -500, 188, 140), &areas), Some((0, 0)));
+    }
+
+    #[test]
+    fn returns_none_when_no_monitors_are_available() {
+        assert_eq!(fit_to_work_area(rect(-300, 200, 188, 140), &[]), None);
+    }
 }
