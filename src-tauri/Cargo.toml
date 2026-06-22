@@ -28,4 +28,8 @@ tokio = { version = "1", features = ["time", "sync"] }
 [target.'cfg(windows)'.dependencies]
 # Raising a pinned widget back above the taskbar needs a raw SetWindowPos
 # (tao no-ops set_always_on_top when the flag is unchanged).
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Registry",
+] }

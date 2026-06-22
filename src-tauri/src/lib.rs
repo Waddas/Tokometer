@@ -63,12 +63,14 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(poller::RefreshSignal(Arc::new(Notify::new())))
+        .manage(tray::DevOverride(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::refresh_now,
             commands::set_pin,
             commands::set_mascot,
             commands::toggle_visibility,
+            commands::set_tray_override,
             commands::get_autostart,
             commands::set_autostart,
         ])
@@ -85,6 +87,7 @@ pub fn run() {
             let layout = persisted.layout;
             let size = persisted.size;
             let mascot = persisted.mascot;
+            let tray_style = persisted.tray_style;
             let work_days = persisted.work_days;
             let saved_pos = persisted.window;
             app.manage(state::AppState(Mutex::new(persisted)));
@@ -103,7 +106,7 @@ pub fn run() {
             let (w, h) = layout.window_size(size);
             let _ = win.set_size(tauri::LogicalSize::new(w, h));
 
-            tray::create(&handle, pin, layout, size, mascot, work_days)?;
+            tray::create(&handle, pin, layout, size, mascot, tray_style, work_days)?;
             let _ = win.show();
 
             let event_win = win.clone();

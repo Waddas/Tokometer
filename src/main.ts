@@ -185,9 +185,11 @@ if (import.meta.env.DEV) {
         const mock = new MockHistory();
         graph.setHistory(mock);
         applySnapshot(mock.snapshot);
+        void api.setTrayOverride(mock.snapshot);
       } else {
         graph.setHistory(history);
         if (lastReal) applySnapshot(lastReal);
+        void api.setTrayOverride(null);
       }
       renderBadge();
     });

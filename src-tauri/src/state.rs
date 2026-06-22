@@ -140,6 +140,32 @@ impl Mascot {
     }
 }
 
+/// How the tray icon renders the 5h figure: a colour-coded progress ring, or
+/// the figure as text.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrayStyle {
+    #[default]
+    Ring,
+    Text,
+}
+
+impl TrayStyle {
+    pub const ALL: [TrayStyle; 2] = [TrayStyle::Ring, TrayStyle::Text];
+
+    /// Stable id; matches the serde kebab-case serialization.
+    pub fn id(self) -> &'static str {
+        match self {
+            TrayStyle::Ring => "ring",
+            TrayStyle::Text => "text",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<TrayStyle> {
+        Self::ALL.into_iter().find(|s| s.id() == id)
+    }
+}
+
 /// Which weekdays count as "work days", indexed Sun..Sat to match the
 /// frontend's `Date.getDay()`. Unchecked days hold the 7-day prediction flat
 /// (no usage expected), so the dotted line doesn't extrapolate across them.
@@ -156,6 +182,7 @@ pub struct PersistedState {
     pub layout: Layout,
     pub size: Size,
     pub mascot: Mascot,
+    pub tray_style: TrayStyle,
     /// All-true by default; a plain derive would flatten the whole prediction.
     #[serde(default = "all_work_days")]
     pub work_days: [bool; 7],
@@ -172,6 +199,7 @@ impl Default for PersistedState {
             layout: Layout::default(),
             size: Size::default(),
             mascot: Mascot::default(),
+            tray_style: TrayStyle::default(),
             work_days: all_work_days(),
             last_usage: None,
         }
@@ -318,6 +346,19 @@ mod tests {
     }
 
     #[test]
+    fn tray_style_id_round_trips_and_rejects_unknown() {
+        for style in TrayStyle::ALL {
+            assert_eq!(TrayStyle::from_id(style.id()), Some(style));
+        }
+        assert_eq!(TrayStyle::from_id("bars"), None);
+    }
+
+    #[test]
+    fn default_tray_style_is_ring() {
+        assert_eq!(TrayStyle::default(), TrayStyle::Ring);
+    }
+
+    #[test]
     fn persisted_state_fills_missing_fields_with_defaults() {
         // The poller writes partial state early on; load() must tolerate it.
         let s: PersistedState = serde_json::from_str("{}").unwrap();
@@ -325,6 +366,7 @@ mod tests {
         assert_eq!(s.layout, Layout::MascotLeft);
         assert_eq!(s.size, Size::Small);
         assert_eq!(s.mascot, Mascot::Clawd);
+        assert_eq!(s.tray_style, TrayStyle::Ring);
         // All-true, not the [false; 7] a plain field default would give —
         // otherwise an old state.json (no workDays key) flattens the prediction.
         assert_eq!(s.work_days, [true; 7]);
@@ -340,6 +382,7 @@ mod tests {
             layout: Layout::TilesRow,
             size: Size::Large,
             mascot: Mascot::Axolotl,
+            tray_style: TrayStyle::Text,
             work_days: [true, false, true, true, true, true, false],
             last_usage: None,
         };
@@ -349,6 +392,7 @@ mod tests {
         assert_eq!(back.layout, original.layout);
         assert_eq!(back.size, original.size);
         assert_eq!(back.mascot, original.mascot);
+        assert_eq!(back.tray_style, original.tray_style);
         assert_eq!(back.work_days, original.work_days);
         assert_eq!(back.window.unwrap().x, 12.0);
     }
