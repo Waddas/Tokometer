@@ -175,10 +175,12 @@ btnSettings.addEventListener("click", () => void api.openSettings());
 btnHide.addEventListener("click", () => void api.toggleVisibility());
 
 /* ---- status line: friendly guidance when polling fails ---- */
+// Kept terse: the widget can be very narrow, and the raw error sits in the
+// element's tooltip for anyone who wants the details.
 function friendlyError(err: string): string {
   if (err.includes("no Claude credentials")) return "Sign in to Claude Code to start tracking";
-  if (err.startsWith("token expired")) return "Token expired — open Claude Code to refresh it";
-  return "Can't reach the usage API — retrying every minute";
+  if (err.startsWith("token expired")) return "Token expired — open Claude Code";
+  return "Can't reach usage API — retrying";
 }
 
 function renderStatus(s: api.UsageSnapshot) {
