@@ -24,9 +24,11 @@ const TEXT = "#faf9f5";
 const TRACK = "#2a2a28";
 
 /** What the graph reads its samples from; UsageHistory or a dev mock. */
-export type GraphSource = Pick<UsageHistory, "points">;
+export type GraphSource = Pick<UsageHistory, "points" | "previousWindow">;
 
 const PAD = 8; // design px
+// Ghosts of windows that never got going are clutter, not comparison.
+const GHOST_MIN_PEAK_PCT = 5;
 
 export class UsageGraph {
   private mode: Mode;
@@ -111,33 +113,27 @@ export class UsageGraph {
       ctx.stroke();
     }
 
-    // Ghost of the previous window, time-shifted onto the same axes.
-    // Walk back up to 4 windows to find one with data (handles skipped windows).
-    let ghost: Pt[] = [];
-    let ghostShift = 0;
-    for (let n = 1; n <= 4; n++) {
-      const gStart = start - n * cfg.windowMs;
-      const candidates = this.history
-        .points(cfg.key, gStart)
-        .filter((p) => p.ms < gStart + cfg.windowMs);
-      if (candidates.length >= 2) {
-        ghost = candidates;
-        ghostShift = n * cfg.windowMs;
-        break;
+    // Ghost of the previous window, overlaid on the current axes by aligning
+    // the two windows' reset times (windows have a fixed width, so their
+    // starts align too). Segmenting by the reset time each sample was polled
+    // with — rather than assuming windows sit back-to-back — keeps a lapsed
+    // window's tail from bleeding into the start of the current one.
+    if (win?.resetAt) {
+      const prev = this.history.previousWindow(cfg.key, win.resetAt * 1000, cfg.windowMs);
+      if (prev && prev.pts.some((p) => p.pct >= GHOST_MIN_PEAK_PCT)) {
+        const shift = end - prev.resetMs;
+        ctx.strokeStyle = DIM;
+        ctx.globalAlpha = 0.3;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (const [i, p] of prev.pts.entries()) {
+          const gx = x(p.ms + shift);
+          if (i === 0) ctx.moveTo(gx, y(p.pct));
+          else ctx.lineTo(gx, y(p.pct));
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
       }
-    }
-    if (ghost.length >= 2) {
-      ctx.strokeStyle = DIM;
-      ctx.globalAlpha = 0.3;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      for (const [i, p] of ghost.entries()) {
-        const gx = x(p.ms + ghostShift);
-        if (i === 0) ctx.moveTo(gx, y(p.pct));
-        else ctx.lineTo(gx, y(p.pct));
-      }
-      ctx.stroke();
-      ctx.globalAlpha = 1;
     }
 
     // The limit ceiling, and a thin marker at the reset time.
