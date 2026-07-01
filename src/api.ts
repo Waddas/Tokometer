@@ -82,6 +82,10 @@ export const setTrayStyle = (style: TrayStyle) => invoke<void>("set_tray_style",
 export const setWorkDays = (days: boolean[]) => invoke<void>("set_work_days", { days });
 export const setProbeFallback = (enabled: boolean) =>
   invoke<void>("set_probe_fallback", { enabled });
+/** Size the widget for a logical width, height locked to the layout's aspect
+ * ratio; `commit` persists the resulting free-resize scale. */
+export const resizeWidget = (width: number, commit: boolean) =>
+  invoke<void>("resize_widget", { width, commit });
 export const toggleVisibility = () => invoke<void>("toggle_visibility");
 export const openSettings = () => invoke<void>("open_settings");
 export const getAutostart = () => invoke<boolean>("get_autostart");

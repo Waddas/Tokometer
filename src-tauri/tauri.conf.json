@@ -17,7 +17,7 @@
         "title": "Tokometer",
         "width": 188,
         "height": 140,
-        "resizable": true,
+        "resizable": false,
         "decorations": false,
         "transparent": true,
         "shadow": false,

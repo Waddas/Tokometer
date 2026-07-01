@@ -233,31 +233,21 @@ pub fn apply_tray_style(app: &AppHandle, style: TrayStyle) {
     }
 }
 
-/// Settle a user drag-resize: derive the free-resize scale from the new
-/// width, snap the height back to the layout's aspect, and persist the scale.
-/// Runs debounced after the last `Resized` event (see lib.rs); converges
-/// because a snap that changes nothing re-enters here as a no-op.
-pub fn settle_resize(app: &AppHandle, win: &tauri::WebviewWindow) {
-    let Ok(physical) = win.inner_size() else {
+/// One step of the corner-grip drag (see main.ts): size the window for the
+/// requested logical width with the height locked to the layout's aspect
+/// ratio, so no drag can distort the widget. `commit` (the drag ending)
+/// persists the resulting free-resize scale.
+#[tauri::command]
+pub fn resize_widget(app: AppHandle, width: f64, commit: bool) {
+    if !width.is_finite() {
         return;
-    };
-    if physical.width == 0 || physical.height == 0 {
-        return; // minimized/hidden — nothing to settle
     }
-    let logical = physical.to_logical::<f64>(win.scale_factor().unwrap_or(1.0));
-    let (layout, cur_scale) = {
-        let state = app.state::<AppState>();
-        let s = state.0.lock().unwrap();
-        (s.layout, s.effective_scale())
-    };
-    let scale = layout.scale_for_width(logical.width);
-    let (tw, th) = layout.window_size(scale);
-    if (logical.width - tw).abs() > 0.5 || (logical.height - th).abs() > 0.5 {
-        let _ = win.set_size(tauri::LogicalSize::new(tw, th));
-    }
-    if (scale - cur_scale).abs() > 0.001 {
+    let layout = app.state::<AppState>().0.lock().unwrap().layout;
+    let scale = layout.scale_for_width(width);
+    resize_main(&app, layout, scale);
+    if commit {
         app.state::<AppState>().0.lock().unwrap().custom_scale = Some(scale);
-        crate::state::save(app);
-        crate::tray::emit_state(app);
+        crate::state::save(&app);
+        crate::tray::emit_state(&app);
     }
 }

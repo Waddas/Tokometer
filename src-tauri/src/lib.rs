@@ -8,7 +8,6 @@ mod trayicon;
 mod update;
 mod usage;
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Manager, RunEvent, WindowEvent};
 use tokio::sync::Notify;
@@ -167,6 +166,7 @@ pub fn run() {
             commands::set_tray_style,
             commands::set_work_days,
             commands::set_probe_fallback,
+            commands::resize_widget,
             commands::toggle_visibility,
             commands::open_settings,
             commands::get_history,
@@ -213,9 +213,6 @@ pub fn run() {
 
             let event_win = win.clone();
             let event_handle = handle.clone();
-            // Debounces the resize settle: only the task spawned by the last
-            // Resized event in a burst (a drag) survives to act.
-            let resize_gen = Arc::new(AtomicU64::new(0));
             win.on_window_event(move |event| match event {
                 // Track moves in memory (logical coords); flushed to disk on exit and state saves.
                 WindowEvent::Moved(physical) => {
@@ -227,20 +224,6 @@ pub fn run() {
                             y: logical.y,
                         });
                     }
-                }
-                // Settle drag-resizes into the layout's aspect ratio and a
-                // persisted free-resize scale, once the burst goes quiet.
-                WindowEvent::Resized(_) => {
-                    let generation = resize_gen.fetch_add(1, Ordering::SeqCst) + 1;
-                    let resize_gen = resize_gen.clone();
-                    let win = event_win.clone();
-                    let handle = event_handle.clone();
-                    tauri::async_runtime::spawn(async move {
-                        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-                        if resize_gen.load(Ordering::SeqCst) == generation {
-                            commands::settle_resize(&handle, &win);
-                        }
-                    });
                 }
                 // The Windows taskbar shares the topmost z-band with a pinned widget
                 // and raises itself above us when clicked — re-assert right away.

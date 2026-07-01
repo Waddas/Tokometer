@@ -64,12 +64,41 @@ document.getElementById("drag-handle")!.addEventListener("mousedown", (e) => {
   void appWindow.startDragging();
 });
 
-/* ---- drag the corner grip to resize; the backend snaps the aspect ratio
- * and persists the resulting scale once the drag settles (lib.rs) ---- */
-document.getElementById("resize-handle")!.addEventListener("mousedown", (e) => {
+/* ---- drag the corner grip to resize. The drag is ours, not the OS's: each
+ * pointer move asks the backend for a width-driven, aspect-locked size, so
+ * the widget can never be stretched out of shape mid-drag; releasing commits
+ * the resulting scale. Pointer capture keeps the moves flowing even though
+ * the grip slides out from under a fast cursor between resizes. ---- */
+const grip = document.getElementById("resize-handle")!;
+grip.addEventListener("mousedown", (e) => e.stopPropagation()); // no move-drag underneath
+grip.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
-  e.stopPropagation(); // don't start a move-drag underneath
-  void appWindow.startResizeDragging("SouthEast");
+  grip.setPointerCapture(e.pointerId);
+  const startX = e.screenX; // screen coords: stable while the window resizes
+  const startWidth = window.innerWidth;
+  let width = startWidth;
+  let raf = 0;
+  const onMove = (ev: PointerEvent) => {
+    width = startWidth + (ev.screenX - startX);
+    // One resize per frame; the invoke is async and moves arrive faster.
+    if (!raf) {
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        void api.resizeWidget(width, false);
+      });
+    }
+  };
+  const onUp = () => {
+    grip.removeEventListener("pointermove", onMove);
+    grip.removeEventListener("pointerup", onUp);
+    grip.removeEventListener("pointercancel", onUp);
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    void api.resizeWidget(width, true);
+  };
+  grip.addEventListener("pointermove", onMove);
+  grip.addEventListener("pointerup", onUp);
+  grip.addEventListener("pointercancel", onUp);
 });
 
 /* ---- mascot chip flips between mascot and graph on click ---- */

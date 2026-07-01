@@ -40,6 +40,7 @@ export class UsageGraph {
   /** Cursor x in design px while hovering, null otherwise. */
   private hoverX: number | null = null;
 
+  private readonly bg = cssColor("--bg", "#000000");
   private readonly green = cssColor("--green", "#788c5d");
   private readonly amber = cssColor("--amber", "#d97757");
   private readonly red = cssColor("--red", "#c0392b");
@@ -52,7 +53,6 @@ export class UsageGraph {
     private history: GraphSource,
   ) {
     this.mode = localStorage.getItem(MODE_KEY) === "weekly" ? "weekly" : "session";
-    canvas.title = "Right-click: switch 5h / 7d";
     canvas.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation(); // keep the mascot picker out of graph right-clicks
@@ -121,10 +121,13 @@ export class UsageGraph {
     const x = (ms: number) => PAD + ((ms - start) / cfg.windowMs) * (w - 2 * PAD);
     const y = (pct: number) => h - PAD - (pct / 100) * (h - 2 * PAD);
 
-    ctx.font = "400 14px Grotesk, sans-serif";
-    ctx.fillStyle = this.dim;
-    ctx.textBaseline = "top";
-    ctx.fillText(cfg.label, PAD, PAD + 4);
+    // The corner label makes way for the hover readout (drawHover).
+    if (this.hoverX === null) {
+      ctx.font = "400 14px Grotesk, sans-serif";
+      ctx.fillStyle = this.dim;
+      ctx.textBaseline = "top";
+      ctx.fillText(cfg.label, PAD, PAD + 4);
+    }
 
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -270,17 +273,26 @@ export class UsageGraph {
       ctx.fill();
     }
 
+    // The readout takes the corner label's spot (the label is hidden while
+    // hovering), on a dark chip so it stays legible over the lines.
     const when = new Date(t);
     const hh = String(when.getHours()).padStart(2, "0");
     const mm = String(when.getMinutes()).padStart(2, "0");
     const day = this.mode === "weekly" ? `${DAY_NAMES[when.getDay()]} ` : "";
     const value = pct === null ? "" : ` · ${pct.toFixed(0)}%${recorded === null ? " est" : ""}`;
-    ctx.font = "400 12px Grotesk, sans-serif";
-    ctx.fillStyle = this.text;
+    const label = `${day}${hh}:${mm}${value}`;
+    ctx.font = "400 14px Grotesk, sans-serif";
     ctx.textBaseline = "top";
-    ctx.textAlign = "right";
-    ctx.fillText(`${day}${hh}:${mm}${value}`, w - PAD, PAD + 4);
-    ctx.textAlign = "left";
+    const tw = ctx.measureText(label).width;
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = this.bg;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === "function") ctx.roundRect(PAD - 3, PAD, tw + 8, 21, 5);
+    else ctx.rect(PAD - 3, PAD, tw + 8, 21);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = this.text;
+    ctx.fillText(label, PAD + 1, PAD + 4);
   }
 
   private strokePolyline(
