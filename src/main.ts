@@ -13,7 +13,9 @@ const root = document.getElementById("root")!;
 const mascotCanvas = document.getElementById("mascot") as HTMLCanvasElement;
 const btnPin = document.getElementById("btn-pin")!;
 const btnRefresh = document.getElementById("btn-refresh")!;
+const btnSettings = document.getElementById("btn-settings")!;
 const btnHide = document.getElementById("btn-hide")!;
+const statusEl = document.getElementById("status")!;
 
 const usage = new UsageRenderer(document.body);
 const splash = new Splash(mascotCanvas);
@@ -60,6 +62,14 @@ root.addEventListener("mousedown", (e) => {
 document.getElementById("drag-handle")!.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
   void appWindow.startDragging();
+});
+
+/* ---- drag the corner grip to resize; the backend snaps the aspect ratio
+ * and persists the resulting scale once the drag settles (lib.rs) ---- */
+document.getElementById("resize-handle")!.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return;
+  e.stopPropagation(); // don't start a move-drag underneath
+  void appWindow.startResizeDragging("SouthEast");
 });
 
 /* ---- mascot chip flips between mascot and graph on click ---- */
@@ -127,12 +137,30 @@ function renderPin() {
   btnPin.classList.toggle("pinned", pinned);
   btnPin.title = pinned ? "Unpin" : "Pin on top";
 }
-for (const btn of [btnPin, btnRefresh, btnHide]) {
+for (const btn of [btnPin, btnRefresh, btnSettings, btnHide]) {
   btn.addEventListener("mousedown", (e) => e.stopPropagation());
 }
 btnPin.addEventListener("click", () => void api.setPin(!pinned));
 btnRefresh.addEventListener("click", () => void api.refreshNow());
+btnSettings.addEventListener("click", () => void api.openSettings());
 btnHide.addEventListener("click", () => void api.toggleVisibility());
+
+/* ---- status line: friendly guidance when polling fails ---- */
+function friendlyError(err: string): string {
+  if (err.includes("no Claude credentials")) return "Sign in to Claude Code to start tracking";
+  if (err.startsWith("token expired")) return "Token expired — open Claude Code to refresh it";
+  return "Can't reach the usage API — retrying every minute";
+}
+
+function renderStatus(s: api.UsageSnapshot) {
+  if (s.status === "ok") {
+    statusEl.hidden = true;
+    return;
+  }
+  statusEl.hidden = false;
+  statusEl.textContent = friendlyError(s.error ?? "");
+  statusEl.title = s.error ?? "";
+}
 
 /* ---- data wiring ---- */
 let mockActive = false;
@@ -140,6 +168,7 @@ let lastReal: api.UsageSnapshot | null = null;
 
 function applySnapshot(s: api.UsageSnapshot) {
   usage.update(s);
+  renderStatus(s);
   if (!mockActive) history.sample(s);
   graph.update(s);
   if (s.status === "ok" && s.fiveHour) {
@@ -147,6 +176,28 @@ function applySnapshot(s: api.UsageSnapshot) {
     splash.setGroup(rate.group());
   }
 }
+
+/* ---- history: the backend owns the log; mirror it, migrating any samples
+ * the pre-backend build left in localStorage ---- */
+const LEGACY_HISTORY_KEY = "usage-history";
+async function initHistory() {
+  const legacy = localStorage.getItem(LEGACY_HISTORY_KEY);
+  if (legacy) {
+    try {
+      await api.importHistory(JSON.parse(legacy) as api.HistorySample[]);
+    } catch {
+      // Unparseable or rejected — nothing worth keeping.
+    }
+    localStorage.removeItem(LEGACY_HISTORY_KEY);
+  }
+  try {
+    history.load(await api.getHistory());
+    graph.redraw();
+  } catch {
+    // Backend unavailable; live sampling still fills the graph.
+  }
+}
+void initHistory();
 
 void api.onUsage((s) => {
   lastReal = s;

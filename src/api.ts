@@ -19,6 +19,18 @@ export interface UsageSnapshot {
   error: string | null;
 }
 
+/** One entry of the backend usage-history log (history.rs). */
+export interface HistorySample {
+  /** unix epoch ms */
+  ms: number;
+  /** 0-100 percent, null when the poll lacked that window */
+  five: number | null;
+  week: number | null;
+  /** each window's reset time (epoch ms); absent on samples from older builds */
+  fiveReset?: number | null;
+  weekReset?: number | null;
+}
+
 /** Mirrors the Rust `Layout` enum (state.rs). */
 export type Layout =
   | "mascot-left"
@@ -31,21 +43,32 @@ export type Layout =
 /** Mirrors the Rust `Mascot` enum (state.rs) and `MascotId` (mascots.ts). */
 export type Mascot = "clawd" | "axolotl" | "cat";
 
-export interface AppStateSnapshot {
+/** Mirrors the Rust `Size` enum (state.rs). */
+export type Size = "small" | "medium" | "large";
+
+/** Mirrors the Rust `TrayStyle` enum (state.rs). */
+export type TrayStyle = "ring" | "text";
+
+/** The persisted preferences, as get_state and state://change report them. */
+export interface Preferences {
   pin: boolean;
   layout: Layout;
+  size: Size;
+  /** Free-resize scale; overrides `size` while set. */
+  customScale: number | null;
   mascot: Mascot;
+  trayStyle: TrayStyle;
   /** Which weekdays the 7-day prediction ramps, indexed Sun..Sat. */
   workDays: boolean[];
+  /** Whether a failing usage endpoint may fall back to the 1-token probe. */
+  probeFallback: boolean;
+}
+
+export interface AppStateSnapshot extends Preferences {
   lastUsage: UsageSnapshot | null;
 }
 
-export interface StateChange {
-  pin: boolean;
-  layout: Layout;
-  mascot: Mascot;
-  /** Which weekdays the 7-day prediction ramps, indexed Sun..Sat. */
-  workDays: boolean[];
+export interface StateChange extends Preferences {
   visible: boolean;
 }
 
@@ -53,7 +76,21 @@ export const getState = () => invoke<AppStateSnapshot>("get_state");
 export const refreshNow = () => invoke<void>("refresh_now");
 export const setPin = (pinned: boolean) => invoke<void>("set_pin", { pinned });
 export const setMascot = (mascot: Mascot) => invoke<void>("set_mascot", { mascot });
+export const setLayout = (layout: Layout) => invoke<void>("set_layout", { layout });
+export const setSize = (size: Size) => invoke<void>("set_size", { size });
+export const setTrayStyle = (style: TrayStyle) => invoke<void>("set_tray_style", { style });
+export const setWorkDays = (days: boolean[]) => invoke<void>("set_work_days", { days });
+export const setProbeFallback = (enabled: boolean) =>
+  invoke<void>("set_probe_fallback", { enabled });
 export const toggleVisibility = () => invoke<void>("toggle_visibility");
+export const openSettings = () => invoke<void>("open_settings");
+export const getAutostart = () => invoke<boolean>("get_autostart");
+export const setAutostart = (enabled: boolean) => invoke<boolean>("set_autostart", { enabled });
+
+export const getHistory = () => invoke<HistorySample[]>("get_history");
+/** One-time migration of the pre-backend localStorage history. */
+export const importHistory = (samples: HistorySample[]) =>
+  invoke<void>("import_history", { samples });
 
 /** Dev/screenshot aid: mirror a mock snapshot in the tray icon (null clears it). */
 export const setTrayOverride = (snapshot: UsageSnapshot | null) =>

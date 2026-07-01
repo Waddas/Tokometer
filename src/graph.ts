@@ -1,9 +1,11 @@
 // Usage-over-time graph, shown in place of the mascot: history line coloured
 // by the usage thresholds, a dotted prediction at the current rate, a red bar
 // at the limit, and a faint ghost of the previous window. Right-clicking it
-// switches between the 5-hour and 7-day windows.
+// switches between the 5-hour and 7-day windows; hovering reads off the time
+// and percentage under the cursor.
 import type { UsageSnapshot } from "./api";
 import type { UsageHistory } from "./history";
+import { AMBER_AT_PCT, RED_AT_PCT } from "./thresholds";
 import { trendSlope, projectUsage, type Pt } from "./trend";
 
 type Mode = "session" | "weekly";
@@ -15,13 +17,7 @@ const MODE = {
 
 const MODE_KEY = "graph-mode";
 
-// Canvas can't resolve CSS variables; these mirror :root in styles.css.
-const GREEN = "#788c5d";
-const AMBER = "#d97757";
-const RED = "#c0392b";
-const DIM = "#b0aea5";
-const TEXT = "#faf9f5";
-const TRACK = "#2a2a28";
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** What the graph reads its samples from; UsageHistory or a dev mock. */
 export type GraphSource = Pick<UsageHistory, "points" | "previousWindow">;
@@ -30,11 +26,26 @@ const PAD = 8; // design px
 // Ghosts of windows that never got going are clutter, not comparison.
 const GHOST_MIN_PEAK_PCT = 5;
 
+/** A :root CSS variable's colour, so the canvas can't drift from styles.css. */
+function cssColor(name: string, fallback: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
 export class UsageGraph {
   private mode: Mode;
   private snapshot: UsageSnapshot | null = null;
   // Weekdays the 7-day prediction ramps, indexed Sun..Sat; all-on until set.
   private workDays: boolean[] = [true, true, true, true, true, true, true];
+  /** Cursor x in design px while hovering, null otherwise. */
+  private hoverX: number | null = null;
+
+  private readonly green = cssColor("--green", "#788c5d");
+  private readonly amber = cssColor("--amber", "#d97757");
+  private readonly red = cssColor("--red", "#c0392b");
+  private readonly dim = cssColor("--dim", "#b0aea5");
+  private readonly text = cssColor("--text", "#faf9f5");
+  private readonly track = cssColor("--track", "#2a2a28");
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -49,6 +60,16 @@ export class UsageGraph {
       localStorage.setItem(MODE_KEY, this.mode);
       this.draw();
     });
+    // offsetX is in the element's own (design) space — the CSS scale
+    // transform is already inverted by the event coordinates.
+    canvas.addEventListener("mousemove", (e) => {
+      this.hoverX = e.offsetX;
+      this.draw();
+    });
+    canvas.addEventListener("mouseleave", () => {
+      this.hoverX = null;
+      this.draw();
+    });
     new ResizeObserver(() => this.draw()).observe(canvas);
     // Keep the time axis and prediction moving between polls.
     setInterval(() => this.draw(), 60_000);
@@ -59,9 +80,14 @@ export class UsageGraph {
     this.draw();
   }
 
-  /** Swap the sample source (dev mock mode). */
+  /** Swap the sample source (dev mock mode, or the backend log arriving). */
   setHistory(h: GraphSource): void {
     this.history = h;
+    this.draw();
+  }
+
+  /** Re-render from the current source (after the backend log loads). */
+  redraw(): void {
     this.draw();
   }
 
@@ -96,7 +122,7 @@ export class UsageGraph {
     const y = (pct: number) => h - PAD - (pct / 100) * (h - 2 * PAD);
 
     ctx.font = "400 14px Grotesk, sans-serif";
-    ctx.fillStyle = DIM;
+    ctx.fillStyle = this.dim;
     ctx.textBaseline = "top";
     ctx.fillText(cfg.label, PAD, PAD + 4);
 
@@ -104,7 +130,7 @@ export class UsageGraph {
     ctx.lineJoin = "round";
 
     // Faint quarter gridlines give the empty space some structure.
-    ctx.strokeStyle = TRACK;
+    ctx.strokeStyle = this.track;
     ctx.lineWidth = 1;
     for (const pct of [25, 50, 75]) {
       ctx.beginPath();
@@ -122,7 +148,7 @@ export class UsageGraph {
       const prev = this.history.previousWindow(cfg.key, win.resetAt * 1000, cfg.windowMs);
       if (prev && prev.pts.some((p) => p.pct >= GHOST_MIN_PEAK_PCT)) {
         const shift = end - prev.resetMs;
-        ctx.strokeStyle = DIM;
+        ctx.strokeStyle = this.dim;
         ctx.globalAlpha = 0.3;
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -138,7 +164,7 @@ export class UsageGraph {
 
     // The limit ceiling, and a thin marker at the reset time.
     if (win?.resetAt) {
-      ctx.strokeStyle = DIM;
+      ctx.strokeStyle = this.dim;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x(end), y(0));
@@ -146,7 +172,7 @@ export class UsageGraph {
       ctx.stroke();
     }
     // The limit reads as a red gridline, not a frame around the panel.
-    ctx.strokeStyle = RED;
+    ctx.strokeStyle = this.red;
     ctx.globalAlpha = 0.7;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -157,11 +183,11 @@ export class UsageGraph {
     if (!win) return;
 
     // The line's colour follows its height: green low, blending through
-    // amber around the warning threshold to red at the limit.
+    // amber at the warning threshold to red at the limit threshold.
     const gradient = ctx.createLinearGradient(0, y(0), 0, y(100));
-    gradient.addColorStop(0, GREEN);
-    gradient.addColorStop(0.5, AMBER);
-    gradient.addColorStop(0.85, RED);
+    gradient.addColorStop(0, this.green);
+    gradient.addColorStop(AMBER_AT_PCT / 100, this.amber);
+    gradient.addColorStop(RED_AT_PCT / 100, this.red);
 
     const pts = this.history.points(cfg.key, start).filter((p) => p.ms <= now);
     pts.push({ ms: Math.min(now, end), pct: win.utilization });
@@ -185,6 +211,7 @@ export class UsageGraph {
     ctx.lineWidth = 3;
     this.strokePolyline(ctx, pts, gradient, x, y);
 
+    let proj: Pt[] | null = null;
     const slope = trendSlope(pts, cfg.trendMs, now);
     if (win.resetAt && slope !== null && now < end) {
       const rise = Math.max(0, slope);
@@ -194,7 +221,7 @@ export class UsageGraph {
         this.mode === "weekly"
           ? (ms: number) => this.workDays[new Date(ms).getDay()] !== false
           : () => true;
-      const proj = projectUsage(now, end, win.utilization, rise, isWorkDay);
+      proj = projectUsage(now, end, win.utilization, rise, isWorkDay);
       ctx.setLineDash([1, 6]);
       this.strokePolyline(ctx, proj, gradient, x, y);
       ctx.setLineDash([]);
@@ -202,10 +229,58 @@ export class UsageGraph {
 
     // A bright "now" marker at the end of the live line.
     const cur = pts[pts.length - 1];
-    ctx.fillStyle = TEXT;
+    ctx.fillStyle = this.text;
     ctx.beginPath();
     ctx.arc(x(cur.ms), y(cur.pct), 2.5, 0, Math.PI * 2);
     ctx.fill();
+
+    this.drawHover(ctx, w, start, cfg.windowMs, pts, proj, y);
+  }
+
+  /** Crosshair plus a time · percentage readout for the hovered instant. */
+  private drawHover(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    start: number,
+    windowMs: number,
+    pts: Pt[],
+    proj: Pt[] | null,
+    y: (pct: number) => number,
+  ): void {
+    if (this.hoverX === null) return;
+    const hx = Math.min(Math.max(this.hoverX, PAD), w - PAD);
+    const t = start + ((hx - PAD) / (w - 2 * PAD)) * windowMs;
+
+    ctx.strokeStyle = this.dim;
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(hx, y(0));
+    ctx.lineTo(hx, y(100));
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Read the recorded line first; past its end, fall back to the prediction.
+    const recorded = interpolate(pts, t);
+    const pct = recorded ?? (proj ? interpolate(proj, t) : null);
+    if (pct !== null) {
+      ctx.fillStyle = this.text;
+      ctx.beginPath();
+      ctx.arc(hx, y(pct), 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const when = new Date(t);
+    const hh = String(when.getHours()).padStart(2, "0");
+    const mm = String(when.getMinutes()).padStart(2, "0");
+    const day = this.mode === "weekly" ? `${DAY_NAMES[when.getDay()]} ` : "";
+    const value = pct === null ? "" : ` · ${pct.toFixed(0)}%${recorded === null ? " est" : ""}`;
+    ctx.font = "400 12px Grotesk, sans-serif";
+    ctx.fillStyle = this.text;
+    ctx.textBaseline = "top";
+    ctx.textAlign = "right";
+    ctx.fillText(`${day}${hh}:${mm}${value}`, w - PAD, PAD + 4);
+    ctx.textAlign = "left";
   }
 
   private strokePolyline(
@@ -230,4 +305,18 @@ export class UsageGraph {
     );
     ctx.stroke();
   }
+}
+
+/** Linear interpolation along a polyline, null outside its time range. */
+function interpolate(series: Pt[], t: number): number | null {
+  if (series.length === 0 || t < series[0].ms || t > series[series.length - 1].ms) return null;
+  for (let i = 1; i < series.length; i++) {
+    if (t <= series[i].ms) {
+      const a = series[i - 1];
+      const b = series[i];
+      const f = b.ms === a.ms ? 0 : (t - a.ms) / (b.ms - a.ms);
+      return a.pct + (b.pct - a.pct) * f;
+    }
+  }
+  return series[series.length - 1].pct;
 }

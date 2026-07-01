@@ -1,5 +1,6 @@
 mod commands;
 mod credentials;
+mod history;
 mod poller;
 mod state;
 mod tray;
@@ -7,6 +8,7 @@ mod trayicon;
 mod update;
 mod usage;
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Manager, RunEvent, WindowEvent};
 use tokio::sync::Notify;
@@ -37,9 +39,11 @@ fn raise_topmost(win: &tauri::WebviewWindow) {
 /// Whether the mouse cursor is currently over the widget window.
 #[cfg(target_os = "windows")]
 fn cursor_over_window(win: &tauri::WebviewWindow) -> bool {
-    let (Ok(pos), Ok(size), Ok(cursor)) =
-        (win.outer_position(), win.outer_size(), win.cursor_position())
-    else {
+    let (Ok(pos), Ok(size), Ok(cursor)) = (
+        win.outer_position(),
+        win.outer_size(),
+        win.cursor_position(),
+    ) else {
         return false;
     };
     cursor.x >= pos.x as f64
@@ -74,7 +78,10 @@ impl ScreenRect {
     }
 
     fn center(self) -> (i64, i64) {
-        (self.x as i64 + self.w as i64 / 2, self.y as i64 + self.h as i64 / 2)
+        (
+            self.x as i64 + self.w as i64 / 2,
+            self.y as i64 + self.h as i64 / 2,
+        )
     }
 }
 
@@ -104,9 +111,11 @@ fn fit_to_work_area(win: ScreenRect, work_areas: &[ScreenRect]) -> Option<(i32, 
 /// left untouched so the widget returns to its original spot if that monitor
 /// comes back.
 fn ensure_on_screen(win: &tauri::WebviewWindow) {
-    let (Ok(pos), Ok(size), Ok(monitors)) =
-        (win.outer_position(), win.outer_size(), win.available_monitors())
-    else {
+    let (Ok(pos), Ok(size), Ok(monitors)) = (
+        win.outer_position(),
+        win.outer_size(),
+        win.available_monitors(),
+    ) else {
         return;
     };
     let work_areas: Vec<ScreenRect> = monitors
@@ -121,7 +130,12 @@ fn ensure_on_screen(win: &tauri::WebviewWindow) {
             }
         })
         .collect();
-    let win_rect = ScreenRect { x: pos.x, y: pos.y, w: size.width as i32, h: size.height as i32 };
+    let win_rect = ScreenRect {
+        x: pos.x,
+        y: pos.y,
+        w: size.width as i32,
+        h: size.height as i32,
+    };
     if let Some((x, y)) = fit_to_work_area(win_rect, &work_areas) {
         let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
     }
@@ -148,7 +162,15 @@ pub fn run() {
             commands::refresh_now,
             commands::set_pin,
             commands::set_mascot,
+            commands::set_layout,
+            commands::set_size,
+            commands::set_tray_style,
+            commands::set_work_days,
+            commands::set_probe_fallback,
             commands::toggle_visibility,
+            commands::open_settings,
+            commands::get_history,
+            commands::import_history,
             commands::set_tray_override,
             commands::get_autostart,
             commands::set_autostart,
@@ -164,18 +186,16 @@ pub fn run() {
             let persisted = state::load(&handle);
             let pin = persisted.pin;
             let layout = persisted.layout;
-            let size = persisted.size;
-            let mascot = persisted.mascot;
-            let tray_style = persisted.tray_style;
-            let work_days = persisted.work_days;
+            let scale = persisted.effective_scale();
             let saved_pos = persisted.window;
             app.manage(state::AppState(Mutex::new(persisted)));
+            app.manage(history::HistoryLog(Mutex::new(history::load(&handle))));
 
             // Restore size before position so the off-screen guard measures the
             // real window bounds; do both before showing so the window never
             // flashes at the default spot.
             let win = app.get_webview_window("main").expect("main window");
-            let (w, h) = layout.window_size(size);
+            let (w, h) = layout.window_size(scale);
             let _ = win.set_size(tauri::LogicalSize::new(w, h));
             match saved_pos {
                 Some(pos) => {
@@ -188,20 +208,39 @@ pub fn run() {
             }
             let _ = win.set_always_on_top(pin);
 
-            tray::create(&handle, pin, layout, size, mascot, tray_style, work_days)?;
+            tray::create(&handle)?;
             let _ = win.show();
 
             let event_win = win.clone();
             let event_handle = handle.clone();
+            // Debounces the resize settle: only the task spawned by the last
+            // Resized event in a burst (a drag) survives to act.
+            let resize_gen = Arc::new(AtomicU64::new(0));
             win.on_window_event(move |event| match event {
                 // Track moves in memory (logical coords); flushed to disk on exit and state saves.
                 WindowEvent::Moved(physical) => {
                     let scale = event_win.scale_factor().unwrap_or(1.0);
                     let logical = physical.to_logical::<f64>(scale);
                     if let Some(state) = event_handle.try_state::<state::AppState>() {
-                        state.0.lock().unwrap().window =
-                            Some(state::WindowPos { x: logical.x, y: logical.y });
+                        state.0.lock().unwrap().window = Some(state::WindowPos {
+                            x: logical.x,
+                            y: logical.y,
+                        });
                     }
+                }
+                // Settle drag-resizes into the layout's aspect ratio and a
+                // persisted free-resize scale, once the burst goes quiet.
+                WindowEvent::Resized(_) => {
+                    let generation = resize_gen.fetch_add(1, Ordering::SeqCst) + 1;
+                    let resize_gen = resize_gen.clone();
+                    let win = event_win.clone();
+                    let handle = event_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                        if resize_gen.load(Ordering::SeqCst) == generation {
+                            commands::settle_resize(&handle, &win);
+                        }
+                    });
                 }
                 // The Windows taskbar shares the topmost z-band with a pinned widget
                 // and raises itself above us when clicked — re-assert right away.
@@ -225,7 +264,13 @@ pub fn run() {
                     let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
                     loop {
                         tick.tick().await;
-                        if !topmost_handle.state::<state::AppState>().0.lock().unwrap().pin {
+                        if !topmost_handle
+                            .state::<state::AppState>()
+                            .0
+                            .lock()
+                            .unwrap()
+                            .pin
+                        {
                             continue;
                         }
                         if let Some(win) = topmost_handle.get_webview_window("main") {
@@ -274,9 +319,15 @@ mod tests {
     fn snaps_a_fully_offscreen_window_to_the_work_area_edge() {
         let areas = [rect(0, 0, 2560, 1440)];
         // Off the left edge: clamp x to the left, keep y.
-        assert_eq!(fit_to_work_area(rect(-300, 200, 188, 140), &areas), Some((0, 200)));
+        assert_eq!(
+            fit_to_work_area(rect(-300, 200, 188, 140), &areas),
+            Some((0, 200))
+        );
         // Off the bottom: clamp y to (bottom - height), keep x.
-        assert_eq!(fit_to_work_area(rect(200, 1500, 188, 140), &areas), Some((200, 1300)));
+        assert_eq!(
+            fit_to_work_area(rect(200, 1500, 188, 140), &areas),
+            Some((200, 1300))
+        );
     }
 
     #[test]
@@ -285,13 +336,19 @@ mod tests {
         // must land on the primary monitor it is closest to, not the far one.
         let primary = rect(0, 24, 2560, 1368);
         let right = rect(2560, 24, 2560, 1368);
-        assert_eq!(fit_to_work_area(rect(-245, 688, 188, 140), &[primary, right]), Some((0, 688)));
+        assert_eq!(
+            fit_to_work_area(rect(-245, 688, 188, 140), &[primary, right]),
+            Some((0, 688))
+        );
     }
 
     #[test]
     fn pins_to_the_corner_when_the_window_is_larger_than_the_area() {
         let areas = [rect(0, 0, 100, 100)];
-        assert_eq!(fit_to_work_area(rect(-500, -500, 188, 140), &areas), Some((0, 0)));
+        assert_eq!(
+            fit_to_work_area(rect(-500, -500, 188, 140), &areas),
+            Some((0, 0))
+        );
     }
 
     #[test]
