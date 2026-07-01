@@ -13,7 +13,9 @@ const root = document.getElementById("root")!;
 const mascotCanvas = document.getElementById("mascot") as HTMLCanvasElement;
 const btnPin = document.getElementById("btn-pin")!;
 const btnRefresh = document.getElementById("btn-refresh")!;
+const btnSettings = document.getElementById("btn-settings")!;
 const btnHide = document.getElementById("btn-hide")!;
+const statusEl = document.getElementById("status")!;
 
 const usage = new UsageRenderer(document.body);
 const splash = new Splash(mascotCanvas);
@@ -60,6 +62,43 @@ root.addEventListener("mousedown", (e) => {
 document.getElementById("drag-handle")!.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
   void appWindow.startDragging();
+});
+
+/* ---- drag the corner grip to resize. The drag is ours, not the OS's: each
+ * pointer move asks the backend for a width-driven, aspect-locked size, so
+ * the widget can never be stretched out of shape mid-drag; releasing commits
+ * the resulting scale. Pointer capture keeps the moves flowing even though
+ * the grip slides out from under a fast cursor between resizes. ---- */
+const grip = document.getElementById("resize-handle")!;
+grip.addEventListener("mousedown", (e) => e.stopPropagation()); // no move-drag underneath
+grip.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  grip.setPointerCapture(e.pointerId);
+  const startX = e.screenX; // screen coords: stable while the window resizes
+  const startWidth = window.innerWidth;
+  let width = startWidth;
+  let raf = 0;
+  const onMove = (ev: PointerEvent) => {
+    width = startWidth + (ev.screenX - startX);
+    // One resize per frame; the invoke is async and moves arrive faster.
+    if (!raf) {
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        void api.resizeWidget(width, false);
+      });
+    }
+  };
+  const onUp = () => {
+    grip.removeEventListener("pointermove", onMove);
+    grip.removeEventListener("pointerup", onUp);
+    grip.removeEventListener("pointercancel", onUp);
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    void api.resizeWidget(width, true);
+  };
+  grip.addEventListener("pointermove", onMove);
+  grip.addEventListener("pointerup", onUp);
+  grip.addEventListener("pointercancel", onUp);
 });
 
 /* ---- mascot chip flips between mascot and graph on click ---- */
@@ -127,12 +166,32 @@ function renderPin() {
   btnPin.classList.toggle("pinned", pinned);
   btnPin.title = pinned ? "Unpin" : "Pin on top";
 }
-for (const btn of [btnPin, btnRefresh, btnHide]) {
+for (const btn of [btnPin, btnRefresh, btnSettings, btnHide]) {
   btn.addEventListener("mousedown", (e) => e.stopPropagation());
 }
 btnPin.addEventListener("click", () => void api.setPin(!pinned));
 btnRefresh.addEventListener("click", () => void api.refreshNow());
+btnSettings.addEventListener("click", () => void api.openSettings());
 btnHide.addEventListener("click", () => void api.toggleVisibility());
+
+/* ---- status line: friendly guidance when polling fails ---- */
+// Kept terse: the widget can be very narrow, and the raw error sits in the
+// element's tooltip for anyone who wants the details.
+function friendlyError(err: string): string {
+  if (err.includes("no Claude credentials")) return "Sign in to Claude Code to start tracking";
+  if (err.startsWith("token expired")) return "Token expired — open Claude Code";
+  return "Can't reach usage API — retrying";
+}
+
+function renderStatus(s: api.UsageSnapshot) {
+  if (s.status === "ok") {
+    statusEl.hidden = true;
+    return;
+  }
+  statusEl.hidden = false;
+  statusEl.textContent = friendlyError(s.error ?? "");
+  statusEl.title = s.error ?? "";
+}
 
 /* ---- data wiring ---- */
 let mockActive = false;
@@ -140,6 +199,7 @@ let lastReal: api.UsageSnapshot | null = null;
 
 function applySnapshot(s: api.UsageSnapshot) {
   usage.update(s);
+  renderStatus(s);
   if (!mockActive) history.sample(s);
   graph.update(s);
   if (s.status === "ok" && s.fiveHour) {
@@ -147,6 +207,28 @@ function applySnapshot(s: api.UsageSnapshot) {
     splash.setGroup(rate.group());
   }
 }
+
+/* ---- history: the backend owns the log; mirror it, migrating any samples
+ * the pre-backend build left in localStorage ---- */
+const LEGACY_HISTORY_KEY = "usage-history";
+async function initHistory() {
+  const legacy = localStorage.getItem(LEGACY_HISTORY_KEY);
+  if (legacy) {
+    try {
+      await api.importHistory(JSON.parse(legacy) as api.HistorySample[]);
+    } catch {
+      // Unparseable or rejected — nothing worth keeping.
+    }
+    localStorage.removeItem(LEGACY_HISTORY_KEY);
+  }
+  try {
+    history.load(await api.getHistory());
+    graph.redraw();
+  } catch {
+    // Backend unavailable; live sampling still fills the graph.
+  }
+}
+void initHistory();
 
 void api.onUsage((s) => {
   lastReal = s;

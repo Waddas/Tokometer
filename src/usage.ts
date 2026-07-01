@@ -1,10 +1,11 @@
 // Usage tile renderer — threshold-coloured percentages and reset countdowns,
 // thresholds and time format from Clawdmeter's firmware ui.cpp.
 import type { UsageSnapshot, UsageWindow } from "./api";
+import { AMBER_AT_PCT, RED_AT_PCT } from "./thresholds";
 
 function pctColor(pct: number): string {
-  if (pct >= 80) return "var(--red)";
-  if (pct >= 50) return "var(--amber)";
+  if (pct >= RED_AT_PCT) return "var(--red)";
+  if (pct >= AMBER_AT_PCT) return "var(--amber)";
   return "var(--green)";
 }
 

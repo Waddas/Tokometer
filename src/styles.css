@@ -287,6 +287,58 @@ body:hover #controls {
   color: var(--accent);
 }
 
+/* ---- resize grip: bottom-right of the widget (real pixels) ---- */
+#resize-handle {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+  outline: none;
+}
+body:hover #resize-handle {
+  opacity: 1;
+}
+#resize-handle svg {
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+#resize-handle:hover {
+  color: var(--text);
+}
+
+/* ---- status line: friendly error / first-run guidance (real pixels).
+ * Wraps up to three lines so narrow widgets don't truncate it; hover shows
+ * the raw error via the title tooltip. ---- */
+#status {
+  position: absolute;
+  bottom: 3px;
+  left: 8px;
+  right: 20px; /* keep clear of the resize grip */
+  color: var(--dim);
+  font: 400 10px/1.25 Grotesk, sans-serif;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  z-index: 9;
+}
+#status[hidden] {
+  display: none;
+}
+
 /* ---- dev badge: shows while dev mode (D) is active (real pixels) ---- */
 #dev-badge {
   position: absolute;

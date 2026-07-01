@@ -134,18 +134,24 @@ pub fn gauge(pct: f64) -> Image<'static> {
 }
 
 /// Green (low) → orange (mid) → red (high). Orange rather than yellow at the
-/// midpoint so it still reads on a light background.
+/// midpoint so it still reads on a light background. The blend points match
+/// the widget's severity thresholds (src/thresholds.ts): full orange at 50%,
+/// full red by 80%.
 fn arc_color(prog: f32) -> (u8, u8, u8) {
     const GREEN: (f32, f32, f32) = (46.0, 160.0, 80.0);
     const ORANGE: (f32, f32, f32) = (224.0, 140.0, 30.0);
     const RED: (f32, f32, f32) = (214.0, 60.0, 60.0);
     let lerp = |a: (f32, f32, f32), b: (f32, f32, f32), t: f32| {
-        (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t, a.2 + (b.2 - a.2) * t)
+        (
+            a.0 + (b.0 - a.0) * t,
+            a.1 + (b.1 - a.1) * t,
+            a.2 + (b.2 - a.2) * t,
+        )
     };
-    let (r, g, b) = if prog < 0.6 {
-        lerp(GREEN, ORANGE, prog / 0.6)
+    let (r, g, b) = if prog < 0.5 {
+        lerp(GREEN, ORANGE, prog / 0.5)
     } else {
-        lerp(ORANGE, RED, (prog - 0.6) / 0.4)
+        lerp(ORANGE, RED, ((prog - 0.5) / 0.3).min(1.0))
     };
     (r.round() as u8, g.round() as u8, b.round() as u8)
 }
@@ -220,7 +226,14 @@ fn single_line(text: &str, color: (u8, u8, u8)) -> Image<'static> {
     let height = line.h + PAD * 2;
     let mut rgba = vec![0u8; width * height * 4];
 
-    blit(&mut rgba, width, &line, PAD + (content_w - line.w) / 2, PAD, color);
+    blit(
+        &mut rgba,
+        width,
+        &line,
+        PAD + (content_w - line.w) / 2,
+        PAD,
+        color,
+    );
     Image::new_owned(rgba, width as u32, height as u32)
 }
 
@@ -242,7 +255,14 @@ fn labelled(top: &str, bottom: &str) -> Image<'static> {
     let ink = ink();
     let mono = (ink, ink, ink);
     blit(&mut rgba, width, &label, (width - label.w) / 2, PAD, mono);
-    blit(&mut rgba, width, &value, (width - value.w) / 2, PAD + label.h + LINE_GAP, mono);
+    blit(
+        &mut rgba,
+        width,
+        &value,
+        (width - value.w) / 2,
+        PAD + label.h + LINE_GAP,
+        mono,
+    );
 
     Image::new_owned(rgba, width as u32, height as u32)
 }
