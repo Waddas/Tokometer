@@ -2,6 +2,7 @@
 // representative usage shape instead of whatever the live account shows.
 // Implements the graph's GraphSource interface; never touches localStorage.
 import type { UsageSnapshot } from "./api";
+import type { WindowSlice } from "./history";
 import type { Pt } from "./trend";
 
 const MIN = 60_000;
@@ -34,22 +35,29 @@ function curve(start: number, end: number, step: number, target: number): Pt[] {
 export class MockHistory {
   private five: Pt[];
   private week: Pt[];
+  /** Reset times of the (mock) previous windows, epoch ms. */
+  private prevFiveReset: number;
+  private prevWeekReset: number;
   readonly snapshot: UsageSnapshot;
 
   constructor(now = Date.now()) {
-    // 5h window: 3.5h in, heading for a tight finish; busy previous window.
+    // 5h window: 3.5h in, heading for a tight finish; busy previous window
+    // that lapsed 24 minutes before this one began.
     const fiveEnd = now + 1.5 * HOUR;
     const fiveStart = fiveEnd - 5 * HOUR;
+    this.prevFiveReset = fiveStart - 0.4 * HOUR;
     this.five = [
-      ...curve(fiveStart - 5 * HOUR, fiveStart - 0.4 * HOUR, 2 * MIN, 88),
+      ...curve(this.prevFiveReset - 5 * HOUR, this.prevFiveReset, 2 * MIN, 88),
       ...curve(fiveStart, now, MIN, 72),
     ];
 
-    // 7d window: 5 days in, comfortable; previous week ran hotter.
+    // 7d window: 5 days in, comfortable; previous week ran hotter and
+    // lapsed 10 hours before this one began.
     const weekEnd = now + 2 * DAY;
     const weekStart = weekEnd - 7 * DAY;
+    this.prevWeekReset = weekStart - 10 * HOUR;
     this.week = [
-      ...curve(weekStart - 7 * DAY, weekStart - 10 * HOUR, 30 * MIN, 61),
+      ...curve(this.prevWeekReset - 7 * DAY, this.prevWeekReset, 30 * MIN, 61),
       ...curve(weekStart, now, 15 * MIN, 30),
     ];
 
@@ -72,5 +80,13 @@ export class MockHistory {
 
   points(key: "five" | "week", startMs: number): Pt[] {
     return (key === "five" ? this.five : this.week).filter((p) => p.ms >= startMs);
+  }
+
+  previousWindow(key: "five" | "week", _currentResetMs: number, windowMs: number): WindowSlice | null {
+    const resetMs = key === "five" ? this.prevFiveReset : this.prevWeekReset;
+    const pts = (key === "five" ? this.five : this.week).filter(
+      (p) => p.ms <= resetMs && p.ms >= resetMs - windowMs,
+    );
+    return pts.length >= 2 ? { pts, resetMs } : null;
   }
 }
