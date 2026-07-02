@@ -117,16 +117,17 @@ function render(prefs: api.Preferences) {
 }
 
 // The window is created hidden (commands.rs) because the webview flashes
-// white before first paint; reveal it once the first render is on screen —
-// or regardless if get_state fails, so the window can never stay invisible.
+// white before first paint; reveal it once the first render is in — or
+// regardless if get_state fails, so the window can never stay invisible.
+// No waiting on requestAnimationFrame here: frames don't tick while the
+// webview is hidden, so its callback would only run after something else
+// showed the window.
 void api
   .getState()
   .then(render)
   .finally(() => {
-    requestAnimationFrame(() => {
-      const win = getCurrentWindow();
-      void win.show().then(() => win.setFocus());
-    });
+    const win = getCurrentWindow();
+    void win.show().then(() => win.setFocus());
   });
 void api.onStateChange(render);
 void api.getAutostart().then((on) => (autostartBox.checked = on));
