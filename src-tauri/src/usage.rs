@@ -21,9 +21,9 @@ pub struct UsageWindow {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageSnapshot {
-    pub status: String, // "ok" | "error"
+    pub status: String,         // "ok" | "error"
     pub source: Option<String>, // "oauth" | "messages"
-    pub fetched_at: i64, // unix epoch ms
+    pub fetched_at: i64,        // unix epoch ms
     pub five_hour: Option<UsageWindow>,
     pub seven_day: Option<UsageWindow>,
     pub five_hour_status: Option<String>, // "allowed" | "limited"
@@ -61,7 +61,6 @@ impl UsageSnapshot {
     }
 }
 
-
 fn value_to_epoch_secs(v: &Value) -> Option<i64> {
     if let Some(n) = v.as_f64() {
         let n = n as i64;
@@ -75,7 +74,10 @@ fn window_from_value(v: &Value) -> Option<UsageWindow> {
     // Verified live: `utilization` is 0–100 percent, `resets_at` is RFC 3339.
     let raw = v.get("utilization")?.as_f64()?;
     let reset_at = v.get("resets_at").and_then(value_to_epoch_secs);
-    Some(UsageWindow { utilization: raw.clamp(0.0, 100.0), reset_at })
+    Some(UsageWindow {
+        utilization: raw.clamp(0.0, 100.0),
+        reset_at,
+    })
 }
 
 /// Parse the `GET /api/oauth/usage` response body.
@@ -93,7 +95,9 @@ pub fn from_ratelimit_headers(headers: &reqwest::header::HeaderMap) -> Option<Us
         get(name).and_then(|s| s.parse::<i64>().ok().or_else(|| parse_rfc3339_to_epoch(s)))
     };
 
-    let five_util: f64 = get("anthropic-ratelimit-unified-5h-utilization")?.parse().ok()?;
+    let five_util: f64 = get("anthropic-ratelimit-unified-5h-utilization")?
+        .parse()
+        .ok()?;
     let seven_util: f64 = get("anthropic-ratelimit-unified-7d-utilization")
         .and_then(|s| s.parse().ok())
         .unwrap_or(0.0);
@@ -158,7 +162,10 @@ mod tests {
     #[test]
     fn parses_basic_utc_timestamp() {
         // 2026-06-04T18:00:00Z == 1780596000 (verified against a known epoch).
-        assert_eq!(parse_rfc3339_to_epoch("2026-06-04T18:00:00Z"), Some(1_780_596_000));
+        assert_eq!(
+            parse_rfc3339_to_epoch("2026-06-04T18:00:00Z"),
+            Some(1_780_596_000)
+        );
     }
 
     #[test]
@@ -201,18 +208,27 @@ mod tests {
 
     #[test]
     fn treats_small_numbers_as_seconds() {
-        assert_eq!(value_to_epoch_secs(&json!(1_780_682_400_i64)), Some(1_780_682_400));
+        assert_eq!(
+            value_to_epoch_secs(&json!(1_780_682_400_i64)),
+            Some(1_780_682_400)
+        );
     }
 
     #[test]
     fn converts_large_numbers_from_millis_to_seconds() {
         // > 1e11 is assumed to be milliseconds.
-        assert_eq!(value_to_epoch_secs(&json!(1_780_682_400_000_i64)), Some(1_780_682_400));
+        assert_eq!(
+            value_to_epoch_secs(&json!(1_780_682_400_000_i64)),
+            Some(1_780_682_400)
+        );
     }
 
     #[test]
     fn parses_rfc3339_strings_in_values() {
-        assert_eq!(value_to_epoch_secs(&json!("2026-06-04T18:00:00Z")), Some(1_780_596_000));
+        assert_eq!(
+            value_to_epoch_secs(&json!("2026-06-04T18:00:00Z")),
+            Some(1_780_596_000)
+        );
     }
 
     #[test]
@@ -317,7 +333,10 @@ mod tests {
     fn parses_rfc3339_reset_headers_too() {
         let h = headers(&[
             ("anthropic-ratelimit-unified-5h-utilization", "0.5"),
-            ("anthropic-ratelimit-unified-5h-reset", "2026-06-04T18:00:00Z"),
+            (
+                "anthropic-ratelimit-unified-5h-reset",
+                "2026-06-04T18:00:00Z",
+            ),
         ]);
         let snap = from_ratelimit_headers(&h).unwrap();
         assert_eq!(snap.five_hour.unwrap().reset_at, Some(1_780_596_000));
@@ -332,7 +351,10 @@ mod tests {
 
     #[test]
     fn ok_snapshot_has_ok_status_and_no_error() {
-        let w = || UsageWindow { utilization: 1.0, reset_at: None };
+        let w = || UsageWindow {
+            utilization: 1.0,
+            reset_at: None,
+        };
         let snap = UsageSnapshot::ok("oauth", w(), w(), Some("allowed".into()));
         assert_eq!(snap.status, "ok");
         assert!(snap.error.is_none());
@@ -353,8 +375,14 @@ mod tests {
     fn snapshot_serializes_to_camel_case_for_the_frontend() {
         let snap = UsageSnapshot::ok(
             "oauth",
-            UsageWindow { utilization: 5.0, reset_at: Some(10) },
-            UsageWindow { utilization: 6.0, reset_at: None },
+            UsageWindow {
+                utilization: 5.0,
+                reset_at: Some(10),
+            },
+            UsageWindow {
+                utilization: 6.0,
+                reset_at: None,
+            },
             None,
         );
         let v = serde_json::to_value(&snap).unwrap();

@@ -10,7 +10,9 @@ export interface Pt {
 
 /**
  * Usage rate in percent per ms over the points within `spanMs` of `now`,
- * or null until the points cover at least an eighth of that span.
+ * or null until the points cover at least an eighth of that span. A
+ * least-squares fit over every recent point, so one noisy sample at either
+ * end can't swing the prediction the way an endpoint slope would.
  */
 export function trendSlope(pts: Pt[], spanMs: number, now: number): number | null {
   const recent = pts.filter((p) => now - p.ms <= spanMs);
@@ -18,7 +20,21 @@ export function trendSlope(pts: Pt[], spanMs: number, now: number): number | nul
   const first = recent[0];
   const last = recent[recent.length - 1];
   if (last.ms - first.ms < spanMs / 8) return null;
-  return (last.pct - first.pct) / (last.ms - first.ms);
+  let st = 0;
+  let sp = 0;
+  let stt = 0;
+  let stp = 0;
+  for (const p of recent) {
+    const t = p.ms - first.ms; // offset to keep t*t well inside float precision
+    st += t;
+    sp += p.pct;
+    stt += t * t;
+    stp += t * p.pct;
+  }
+  const n = recent.length;
+  const denom = n * stt - st * st;
+  if (denom === 0) return null;
+  return (n * stp - st * sp) / denom;
 }
 
 /**

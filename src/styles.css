@@ -15,7 +15,13 @@
   --amber: #d97757;
   --red: #c0392b;
   --track: #2a2a28;
-  --scale: 0.6667; /* window-width / layout design-width, set from JS */
+  /* min(window-width / layout design-width, 1), set from JS. Chrome —
+   * radii, graph furniture — follows small widgets down but stops growing
+   * past design size, so a large widget grows its content, not its bezels. */
+  --chrome: 0.6667;
+  /* Bezels (margins and gaps) cap earlier still: past 3/4 of design size
+   * they read thick, so big widgets keep a slightly slimmer frame. */
+  --bezel: min(var(--chrome), 0.75);
 }
 
 * {
@@ -47,33 +53,33 @@ body {
   overflow: hidden;
 }
 
-/* Everything inside renders in the layout's design space, scaled to fit. */
-#scaler {
-  transform: scale(var(--scale));
-  transform-origin: top left;
+/* Everything inside lays out in real pixels: a grid whose tracks keep the
+ * design proportions while the chrome-scaled padding and gaps stay put. */
+#content {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
+  display: grid;
+  padding: calc(14px * var(--bezel));
+  gap: calc(10px * var(--bezel));
 }
 
-/* ---- mascot chip (the chip can be wider than the mascot; it stays centered) ---- */
+/* ---- mascot chip (the chip can be wider than the mascot; it stays centered).
+ * Clicking it flips between the mascot and the usage graph. ---- */
 #mascot-chip {
-  position: absolute;
+  position: relative;
   background: var(--panel);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border-radius: calc(8px * var(--chrome));
+  cursor: pointer;
+  /* The canvas's transferred intrinsic size must not inflate the chip's
+   * automatic minimum, or wide chips (mascot-top/bottom) crush the tiles. */
+  min-width: 0;
+  min-height: 0;
 }
 #mascot {
-  width: 140px;
-  height: 140px;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   image-rendering: pixelated;
-}
-
-/* The chip flips between the mascot and the usage graph on click. */
-#mascot-chip {
-  cursor: pointer;
 }
 #mascot-chip #graph {
   position: absolute;
@@ -91,126 +97,93 @@ body {
 
 /* ---- usage tiles: big percentage over a short reset countdown ---- */
 .panel {
-  position: absolute;
-  width: 100px;
-  height: 65px;
   background: var(--panel);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--chrome));
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* Size container: the tile drives its type sizes (cqh/cqw in .pct/.reset). */
+  container-type: size;
 }
-
 
 /* ---- layouts ----
- * Shared grid: 14px margins, 10px gaps, 140px mascot, 100x65 tiles.
- * Each layout's design space is noted; the window is that scaled by the
- * chosen Size — Small is x2/3 (state.rs). */
+ * Shared geometry at design size: 14px margins, 10px gaps, 140px mascot,
+ * 100x65 tiles. Tracks are fr ratios of the design dimensions, so the content
+ * keeps its proportions at any window size. Only the mascot chip is placed
+ * explicitly; the tiles auto-flow around it in source order (session, weekly).
+ * Each layout's design space is noted; state.rs scales it to size the window. */
 
 /* mascot-left: 282x168 */
+.layout-mascot-left #content {
+  grid-template-columns: 140fr 100fr;
+  grid-template-rows: 1fr 1fr;
+  column-gap: calc(14px * var(--bezel));
+}
 .layout-mascot-left #mascot-chip {
-  top: 14px;
-  left: 14px;
-  width: 140px;
-  height: 140px;
-}
-.layout-mascot-left .panel {
-  left: 168px;
-}
-.layout-mascot-left .panel[data-window="session"] {
-  top: 14px;
-}
-.layout-mascot-left .panel[data-window="weekly"] {
-  top: 89px;
+  grid-area: 1 / 1 / 3 / 2;
 }
 
 /* mascot-right: 282x168 */
+.layout-mascot-right #content {
+  grid-template-columns: 100fr 140fr;
+  grid-template-rows: 1fr 1fr;
+  column-gap: calc(14px * var(--bezel));
+}
 .layout-mascot-right #mascot-chip {
-  top: 14px;
-  left: 128px;
-  width: 140px;
-  height: 140px;
-}
-.layout-mascot-right .panel {
-  left: 14px;
-}
-.layout-mascot-right .panel[data-window="session"] {
-  top: 14px;
-}
-.layout-mascot-right .panel[data-window="weekly"] {
-  top: 89px;
+  grid-area: 1 / 2 / 3 / 3;
 }
 
 /* mascot-top: 238x243 */
+.layout-mascot-top #content {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 140fr 65fr;
+}
 .layout-mascot-top #mascot-chip {
-  top: 14px;
-  left: 14px;
-  width: 210px;
-  height: 140px;
-}
-.layout-mascot-top .panel {
-  top: 164px;
-}
-.layout-mascot-top .panel[data-window="session"] {
-  left: 14px;
-}
-.layout-mascot-top .panel[data-window="weekly"] {
-  left: 124px;
+  grid-area: 1 / 1 / 2 / 3;
 }
 
 /* mascot-bottom: 238x243 */
+.layout-mascot-bottom #content {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 65fr 140fr;
+}
 .layout-mascot-bottom #mascot-chip {
-  top: 89px;
-  left: 14px;
-  width: 210px;
-  height: 140px;
-}
-.layout-mascot-bottom .panel {
-  top: 14px;
-}
-.layout-mascot-bottom .panel[data-window="session"] {
-  left: 14px;
-}
-.layout-mascot-bottom .panel[data-window="weekly"] {
-  left: 124px;
+  grid-area: 2 / 1 / 3 / 3;
 }
 
 /* tiles-row: 238x93 */
+.layout-tiles-row #content {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
 .layout-tiles-row #mascot-chip {
   display: none;
 }
-.layout-tiles-row .panel {
-  top: 14px;
-}
-.layout-tiles-row .panel[data-window="session"] {
-  left: 14px;
-}
-.layout-tiles-row .panel[data-window="weekly"] {
-  left: 124px;
-}
 
 /* tiles-column: 128x168 */
+.layout-tiles-column #content {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr 1fr;
+}
 .layout-tiles-column #mascot-chip {
   display: none;
 }
-.layout-tiles-column .panel {
-  left: 14px;
-}
-.layout-tiles-column .panel[data-window="session"] {
-  top: 14px;
-}
-.layout-tiles-column .panel[data-window="weekly"] {
-  top: 89px;
-}
 
+/* Type tracks the tile: the cqh terms are 36px/18px at the 65px design tile
+ * height, the cqw terms the same at its 100px width (so "100%" never spills
+ * out of a tile that grew taller than the design aspect). */
 .pct {
-  font: 400 36px/1.1 Grotesk, sans-serif;
+  font-family: Grotesk, sans-serif;
+  font-size: min(55.4cqh, 36cqw);
+  line-height: 1.1;
   color: var(--dim);
 }
 
 .reset {
-  font: 400 18px/1.1 Grotesk, sans-serif;
+  font-family: Grotesk, sans-serif;
+  font-size: min(27.7cqh, 18cqw);
+  line-height: 1.1;
   color: var(--dim);
 }
 
@@ -285,6 +258,82 @@ body:hover #controls {
 }
 #btn-pin.pinned {
   color: var(--accent);
+}
+
+/* ---- resize grip: bottom-right of the widget (real pixels) ---- */
+#resize-handle {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+  outline: none;
+}
+body:hover #resize-handle {
+  opacity: 1;
+}
+#resize-handle svg {
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+#resize-handle:hover {
+  color: var(--text);
+}
+
+/* ---- status bar: friendly error / first-run guidance (real pixels).
+ * A docked row: while it's up, #content reserves a band for it (below), so
+ * the bar sits in its own space — aligned and cornered like the tiles —
+ * instead of overlapping them. Ellipsized to one line, raw error in the
+ * title tooltip. ---- */
+:root {
+  --status-h: 20px; /* the bar's fixed height, shared with the #content inset */
+}
+#status {
+  position: absolute;
+  left: calc(14px * var(--bezel));
+  right: calc(14px * var(--bezel));
+  bottom: calc(14px * var(--bezel));
+  height: var(--status-h);
+  padding: 3px 10px 4px;
+  background: var(--panel);
+  border-radius: calc(8px * var(--chrome));
+  color: var(--dim);
+  font: 400 10px/1.3 Grotesk, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 9;
+}
+/* The reserved band: bezel-sized gap above the bar, bar, then its bottom
+ * inset — main.ts toggles the class with the bar's visibility. */
+#root.has-status #content {
+  padding-bottom: calc(var(--status-h) + 24px * var(--bezel));
+}
+#status::before {
+  /* amber dot: reads as "attention" without shouting */
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  vertical-align: 1px;
+}
+#status[hidden] {
+  display: none;
 }
 
 /* ---- dev badge: shows while dev mode (D) is active (real pixels) ---- */

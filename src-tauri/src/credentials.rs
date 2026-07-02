@@ -5,13 +5,25 @@ use std::path::PathBuf;
 fn candidate_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
-        paths.push(PathBuf::from(&home).join(".claude").join(".credentials.json"));
+        paths.push(
+            PathBuf::from(&home)
+                .join(".claude")
+                .join(".credentials.json"),
+        );
     }
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-        paths.push(PathBuf::from(&local).join("Claude").join(".credentials.json"));
+        paths.push(
+            PathBuf::from(&local)
+                .join("Claude")
+                .join(".credentials.json"),
+        );
     }
     if let Some(roaming) = std::env::var_os("APPDATA") {
-        paths.push(PathBuf::from(&roaming).join("Claude").join(".credentials.json"));
+        paths.push(
+            PathBuf::from(&roaming)
+                .join("Claude")
+                .join(".credentials.json"),
+        );
     }
     paths
 }
@@ -47,7 +59,12 @@ fn parse(text: &str) -> Option<Credentials> {
 #[cfg(target_os = "macos")]
 fn read_keychain() -> Option<Credentials> {
     let output = std::process::Command::new("/usr/bin/security")
-        .args(["find-generic-password", "-s", "Claude Code-credentials", "-w"])
+        .args([
+            "find-generic-password",
+            "-s",
+            "Claude Code-credentials",
+            "-w",
+        ])
         .output()
         .ok()?;
     if !output.status.success() {
@@ -67,7 +84,9 @@ pub fn read() -> Result<Credentials, String> {
     }
 
     for path in candidate_paths() {
-        let Ok(text) = std::fs::read_to_string(&path) else { continue };
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
         if let Some(creds) = parse(&text) {
             return Ok(creds);
         }
@@ -82,10 +101,9 @@ mod tests {
 
     #[test]
     fn parses_nested_claude_ai_oauth_layout() {
-        let creds = parse(
-            r#"{"claudeAiOauth": {"accessToken": "tok-123", "expiresAt": 1780682400000}}"#,
-        )
-        .unwrap();
+        let creds =
+            parse(r#"{"claudeAiOauth": {"accessToken": "tok-123", "expiresAt": 1780682400000}}"#)
+                .unwrap();
         assert_eq!(creds.token, "tok-123");
         assert_eq!(creds.expires_at, Some(1_780_682_400_000));
     }
@@ -111,19 +129,28 @@ mod tests {
 
     #[test]
     fn looks_expired_is_false_for_future_expiry() {
-        let creds = Credentials { token: "t".into(), expires_at: Some(now_ms() + 60_000) };
+        let creds = Credentials {
+            token: "t".into(),
+            expires_at: Some(now_ms() + 60_000),
+        };
         assert!(!creds.looks_expired());
     }
 
     #[test]
     fn looks_expired_is_true_for_past_expiry() {
-        let creds = Credentials { token: "t".into(), expires_at: Some(now_ms() - 60_000) };
+        let creds = Credentials {
+            token: "t".into(),
+            expires_at: Some(now_ms() - 60_000),
+        };
         assert!(creds.looks_expired());
     }
 
     #[test]
     fn looks_expired_is_false_when_expiry_is_unknown() {
-        let creds = Credentials { token: "t".into(), expires_at: None };
+        let creds = Credentials {
+            token: "t".into(),
+            expires_at: None,
+        };
         assert!(!creds.looks_expired());
     }
 }

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tokometer Settings</title>
+  </head>
+  <body>
+    <main>
+      <section>
+        <h2>Widget</h2>
+        <div class="field">
+          <span class="label">Layout</span>
+          <div class="options" id="opt-layout"></div>
+        </div>
+        <div class="field">
+          <span class="label">Size</span>
+          <div class="options" id="opt-size"></div>
+          <p class="hint" id="size-hint">Or drag the widget's bottom-right grip to any size.</p>
+        </div>
+        <div class="field">
+          <span class="label">Mascot</span>
+          <div class="options" id="opt-mascot"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="pin" /><span>Pin on top</span></label>
+      </section>
+
+      <section>
+        <h2>Tray icon</h2>
+        <div class="field">
+          <div class="options" id="opt-tray"></div>
+        </div>
+        <p class="hint">Ring shows a colour-coded gauge; Text shows the 5h percentage.</p>
+      </section>
+
+      <section>
+        <h2>Work days</h2>
+        <p class="hint">The 7-day forecast only ramps across the days you work.</p>
+        <div class="days" id="days"></div>
+      </section>
+
+      <section>
+        <h2>General</h2>
+        <label class="check"><input type="checkbox" id="autostart" /><span>Start at login</span></label>
+        <label class="check"><input type="checkbox" id="probe" /><span>Fallback usage probe</span></label>
+        <p class="hint indent">
+          When the free usage endpoint fails, cross-check by sending a minimal
+          1-token API request. This spends a tiny amount of the quota it
+          measures, at most once every 5 minutes.
+        </p>
+      </section>
+
+      <p class="version" id="version"></p>
+    </main>
+    <script type="module" src="/src/settings.ts"></script>
+  </body>
+</html>

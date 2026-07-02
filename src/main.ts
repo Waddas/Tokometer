@@ -13,7 +13,9 @@ const root = document.getElementById("root")!;
 const mascotCanvas = document.getElementById("mascot") as HTMLCanvasElement;
 const btnPin = document.getElementById("btn-pin")!;
 const btnRefresh = document.getElementById("btn-refresh")!;
+const btnSettings = document.getElementById("btn-settings")!;
 const btnHide = document.getElementById("btn-hide")!;
+const statusEl = document.getElementById("status")!;
 
 const usage = new UsageRenderer(document.body);
 const splash = new Splash(mascotCanvas);
@@ -25,7 +27,9 @@ const graph = new UsageGraph(document.getElementById("graph") as HTMLCanvasEleme
 /* ---- layouts ----
  * Each layout has its own design-space width (geometry in styles.css); the
  * window is the design space scaled by the chosen Size (factors in state.rs).
- * `--scale` is derived from the resized width, so any size fills correctly. */
+ * `--chrome` is derived from the resized width: margins, gaps and radii track
+ * small widgets down but stop growing past design size, so large widgets put
+ * the room into content instead of bezels. */
 const DESIGN_WIDTH: Record<api.Layout, number> = {
   "mascot-left": 282,
   "mascot-right": 282,
@@ -38,10 +42,8 @@ const DESIGN_WIDTH: Record<api.Layout, number> = {
 let layout: api.Layout = "mascot-left";
 
 function updateScale() {
-  document.documentElement.style.setProperty(
-    "--scale",
-    String(window.innerWidth / DESIGN_WIDTH[layout]),
-  );
+  const scale = window.innerWidth / DESIGN_WIDTH[layout];
+  document.documentElement.style.setProperty("--chrome", String(Math.min(1, scale)));
 }
 window.addEventListener("resize", updateScale);
 
@@ -60,6 +62,43 @@ root.addEventListener("mousedown", (e) => {
 document.getElementById("drag-handle")!.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
   void appWindow.startDragging();
+});
+
+/* ---- drag the corner grip to resize. The drag is ours, not the OS's: each
+ * pointer move asks the backend for a width-driven, aspect-locked size, so
+ * the widget can never be stretched out of shape mid-drag; releasing commits
+ * the resulting scale. Pointer capture keeps the moves flowing even though
+ * the grip slides out from under a fast cursor between resizes. ---- */
+const grip = document.getElementById("resize-handle")!;
+grip.addEventListener("mousedown", (e) => e.stopPropagation()); // no move-drag underneath
+grip.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  grip.setPointerCapture(e.pointerId);
+  const startX = e.screenX; // screen coords: stable while the window resizes
+  const startWidth = window.innerWidth;
+  let width = startWidth;
+  let raf = 0;
+  const onMove = (ev: PointerEvent) => {
+    width = startWidth + (ev.screenX - startX);
+    // One resize per frame; the invoke is async and moves arrive faster.
+    if (!raf) {
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        void api.resizeWidget(width, false);
+      });
+    }
+  };
+  const onUp = () => {
+    grip.removeEventListener("pointermove", onMove);
+    grip.removeEventListener("pointerup", onUp);
+    grip.removeEventListener("pointercancel", onUp);
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    void api.resizeWidget(width, true);
+  };
+  grip.addEventListener("pointermove", onMove);
+  grip.addEventListener("pointerup", onUp);
+  grip.addEventListener("pointercancel", onUp);
 });
 
 /* ---- mascot chip flips between mascot and graph on click ---- */
@@ -127,12 +166,32 @@ function renderPin() {
   btnPin.classList.toggle("pinned", pinned);
   btnPin.title = pinned ? "Unpin" : "Pin on top";
 }
-for (const btn of [btnPin, btnRefresh, btnHide]) {
+for (const btn of [btnPin, btnRefresh, btnSettings, btnHide]) {
   btn.addEventListener("mousedown", (e) => e.stopPropagation());
 }
 btnPin.addEventListener("click", () => void api.setPin(!pinned));
 btnRefresh.addEventListener("click", () => void api.refreshNow());
+btnSettings.addEventListener("click", () => void api.openSettings());
 btnHide.addEventListener("click", () => void api.toggleVisibility());
+
+/* ---- status line: friendly guidance when polling fails ---- */
+// Kept terse: the widget can be very narrow, and the raw error sits in the
+// element's tooltip for anyone who wants the details.
+function friendlyError(err: string): string {
+  if (err.includes("no Claude credentials")) return "Sign in to Claude Code to start tracking";
+  if (err.startsWith("token expired")) return "Token expired — open Claude Code";
+  return "Can't reach usage API — retrying";
+}
+
+function renderStatus(s: api.UsageSnapshot) {
+  const failing = s.status !== "ok";
+  statusEl.hidden = !failing;
+  // The content grid reserves a band for the bar while it's up (styles.css).
+  root.classList.toggle("has-status", failing);
+  if (!failing) return;
+  statusEl.textContent = friendlyError(s.error ?? "");
+  statusEl.title = s.error ?? "";
+}
 
 /* ---- data wiring ---- */
 let mockActive = false;
@@ -140,6 +199,7 @@ let lastReal: api.UsageSnapshot | null = null;
 
 function applySnapshot(s: api.UsageSnapshot) {
   usage.update(s);
+  renderStatus(s);
   if (!mockActive) history.sample(s);
   graph.update(s);
   if (s.status === "ok" && s.fiveHour) {
@@ -148,18 +208,42 @@ function applySnapshot(s: api.UsageSnapshot) {
   }
 }
 
+/* ---- history: the backend owns the log; mirror it, migrating any samples
+ * the pre-backend build left in localStorage ---- */
+const LEGACY_HISTORY_KEY = "usage-history";
+async function initHistory() {
+  const legacy = localStorage.getItem(LEGACY_HISTORY_KEY);
+  if (legacy) {
+    try {
+      await api.importHistory(JSON.parse(legacy) as api.HistorySample[]);
+    } catch {
+      // Unparseable or rejected — nothing worth keeping.
+    }
+    localStorage.removeItem(LEGACY_HISTORY_KEY);
+  }
+  try {
+    history.load(await api.getHistory());
+    graph.redraw();
+  } catch {
+    // Backend unavailable; live sampling still fills the graph.
+  }
+}
+void initHistory();
+
 void api.onUsage((s) => {
   lastReal = s;
   if (!mockActive) applySnapshot(s);
 });
 
 /* ---- dev: D toggles dev mode, shown as a badge in the top strip. While on,
- * M toggles mocked data and A cycles the mascot animation; leaving dev mode
- * resets both. ---- */
+ * M cycles the data source (live → mock → error) and A cycles the mascot
+ * animation; leaving dev mode resets both. ---- */
 if (import.meta.env.DEV) {
   let devMode = false;
   let pinnedAnim = -1; // -1 = automatic rate-grouped rotation
   let barHidden = false; // tray "Hide dev bar" — keeps dev mode on for captures
+  const SOURCES = ["live", "mock", "error"] as const;
+  let devSource: (typeof SOURCES)[number] = "live";
 
   const badge = document.createElement("div");
   badge.id = "dev-badge";
@@ -169,7 +253,7 @@ if (import.meta.env.DEV) {
   function renderBadge() {
     badge.hidden = !devMode || barHidden;
     const anim = pinnedAnim === -1 ? "auto" : splash.animationNames()[pinnedAnim];
-    badge.textContent = `dev · ${mockActive ? "mock" : "live"} · ${anim}`;
+    badge.textContent = `dev · ${devSource} · ${anim}`;
   }
 
   void api.onDevBarHidden((hidden) => {
@@ -177,15 +261,34 @@ if (import.meta.env.DEV) {
     renderBadge();
   });
 
-  const setMock = (on: boolean) =>
+  // A snapshot shaped like a failed poll, for iterating on the error UX.
+  const errorSnapshot = (): api.UsageSnapshot => ({
+    status: "error",
+    source: null,
+    fetchedAt: Date.now(),
+    fiveHour: null,
+    sevenDay: null,
+    fiveHourStatus: null,
+    error: "mocked failure (dev): usage API unreachable",
+  });
+
+  const setSource = (src: (typeof SOURCES)[number]) =>
     import("./mock").then(({ MockHistory }) => {
-      if (mockActive === on) return;
-      mockActive = on;
-      if (on) {
+      if (devSource === src) return;
+      devSource = src;
+      mockActive = src !== "live";
+      if (src === "mock") {
         const mock = new MockHistory();
         graph.setHistory(mock);
         applySnapshot(mock.snapshot);
         void api.setTrayOverride(mock.snapshot);
+      } else if (src === "error") {
+        // The real history stays under the graph, as it would on a live
+        // failure; only the snapshot reports the outage.
+        graph.setHistory(history);
+        const snap = errorSnapshot();
+        applySnapshot(snap);
+        void api.setTrayOverride(snap);
       } else {
         graph.setHistory(history);
         if (lastReal) applySnapshot(lastReal);
@@ -206,13 +309,14 @@ if (import.meta.env.DEV) {
       case "d":
         devMode = !devMode;
         if (!devMode) {
-          void setMock(false);
+          void setSource("live");
           setAnim(-1);
         }
         renderBadge();
         break;
       case "m":
-        if (devMode) void setMock(!mockActive);
+        if (devMode)
+          void setSource(SOURCES[(SOURCES.indexOf(devSource) + 1) % SOURCES.length]);
         break;
       case "a":
         if (devMode) {

@@ -2,6 +2,7 @@ use serde_json::json;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
+use crate::history::{HistoryLog, Sample};
 use crate::poller::RefreshSignal;
 use crate::state::{AppState, Layout, Mascot, Size, TrayStyle};
 
@@ -11,8 +12,12 @@ pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
     json!({
         "pin": s.pin,
         "layout": s.layout,
+        "size": s.size,
+        "customScale": s.custom_scale,
         "mascot": s.mascot,
+        "trayStyle": s.tray_style,
         "workDays": s.work_days,
+        "probeFallback": s.probe_fallback,
         "lastUsage": s.last_usage,
     })
 }
@@ -35,8 +40,68 @@ pub fn set_mascot(app: AppHandle, mascot: String) {
 }
 
 #[tauri::command]
+pub fn set_layout(app: AppHandle, layout: String) {
+    if let Some(layout) = Layout::from_id(&layout) {
+        apply_layout(&app, layout);
+    }
+}
+
+#[tauri::command]
+pub fn set_size(app: AppHandle, size: String) {
+    if let Some(size) = Size::from_id(&size) {
+        apply_size(&app, size);
+    }
+}
+
+#[tauri::command]
+pub fn set_tray_style(app: AppHandle, style: String) {
+    if let Some(style) = TrayStyle::from_id(&style) {
+        apply_tray_style(&app, style);
+    }
+}
+
+#[tauri::command]
+pub fn set_work_days(app: AppHandle, days: Vec<bool>) {
+    let Ok(days) = <[bool; 7]>::try_from(days) else {
+        return;
+    };
+    app.state::<AppState>().0.lock().unwrap().work_days = days;
+    crate::state::save(&app);
+    crate::tray::emit_state(&app);
+}
+
+#[tauri::command]
+pub fn set_probe_fallback(app: AppHandle, enabled: bool) {
+    app.state::<AppState>().0.lock().unwrap().probe_fallback = enabled;
+    crate::state::save(&app);
+    crate::tray::emit_state(&app);
+}
+
+#[tauri::command]
 pub fn toggle_visibility(app: AppHandle) {
     crate::tray::toggle_visibility(&app);
+}
+
+#[tauri::command]
+pub fn open_settings(app: AppHandle) {
+    show_settings(&app);
+}
+
+#[tauri::command]
+pub fn get_history(log: State<'_, HistoryLog>) -> Vec<Sample> {
+    log.0.lock().unwrap().clone()
+}
+
+/// One-time migration of the pre-backend localStorage history (see
+/// `history::import` for the merge rules).
+#[tauri::command]
+pub fn import_history(app: AppHandle, samples: Vec<Sample>) {
+    {
+        let log = app.state::<HistoryLog>();
+        let mut log = log.0.lock().unwrap();
+        crate::history::import(&mut log, samples, crate::usage::now_ms());
+    }
+    crate::history::save(&app);
 }
 
 /// Dev/screenshot aid: mirror a mock snapshot in the tray (or clear it with
@@ -49,7 +114,12 @@ pub fn set_tray_override(app: AppHandle, snapshot: Option<crate::usage::UsageSna
     // Re-render now. update() re-applies the override; fall back to the last live
     // snapshot so clearing the override restores the real figure immediately.
     let render = {
-        let ov = app.state::<crate::tray::DevOverride>().0.lock().unwrap().clone();
+        let ov = app
+            .state::<crate::tray::DevOverride>()
+            .0
+            .lock()
+            .unwrap()
+            .clone();
         ov.or_else(|| app.state::<AppState>().0.lock().unwrap().last_usage.clone())
     };
     if let Some(snapshot) = render {
@@ -65,86 +135,96 @@ pub fn get_autostart(app: AppHandle) -> bool {
 #[tauri::command]
 pub fn set_autostart(app: AppHandle, enabled: bool) -> bool {
     let autolaunch = app.autolaunch();
-    let _ = if enabled { autolaunch.enable() } else { autolaunch.disable() };
-    let now = autolaunch.is_enabled().unwrap_or(false);
-    if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
-        let _ = handles.autostart_item.set_checked(now);
-    }
-    now
+    let _ = if enabled {
+        autolaunch.enable()
+    } else {
+        autolaunch.disable()
+    };
+    autolaunch.is_enabled().unwrap_or(false)
 }
 
-/// Single mutation path for "pin on top" — used by both the UI command and the tray.
+/// Show the settings window, creating it on first use. Also the tray's
+/// "Settings…" entry point.
+pub fn show_settings(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return;
+    }
+    let _ = tauri::WebviewWindowBuilder::new(
+        app,
+        "settings",
+        tauri::WebviewUrl::App("settings.html".into()),
+    )
+    .title("Tokometer Settings")
+    .inner_size(420.0, 620.0)
+    .resizable(false)
+    .maximizable(false)
+    .minimizable(false)
+    // Born hidden, and black underneath: the page shows itself once its
+    // first render has landed (settings.ts), but the webview can still
+    // surface before its first paint — a native background in the page's
+    // colour keeps that moment invisible instead of a white flash.
+    .visible(false)
+    .background_color(tauri::window::Color(0, 0, 0, 255))
+    .build();
+}
+
+fn resize_main(app: &AppHandle, layout: Layout, scale: f64) {
+    if let Some(win) = app.get_webview_window("main") {
+        let (w, h) = layout.window_size(scale);
+        let _ = win.set_size(tauri::LogicalSize::new(w, h));
+    }
+}
+
+/// Single mutation path for "pin on top" — used by the UI command and settings.
 pub fn apply_pin(app: &AppHandle, pinned: bool) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.set_always_on_top(pinned);
     }
     app.state::<AppState>().0.lock().unwrap().pin = pinned;
     crate::state::save(app);
-    if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
-        let _ = handles.pin_item.set_checked(pinned);
-    }
     crate::tray::emit_state(app);
 }
 
-/// Single mutation path for the widget layout — resizes the window, persists,
-/// and syncs the tray's radio-style check items.
+/// Single mutation path for the widget layout — resizes the window and persists.
 pub fn apply_layout(app: &AppHandle, layout: Layout) {
-    let size = {
+    let scale = {
         let state = app.state::<AppState>();
         let mut s = state.0.lock().unwrap();
         s.layout = layout;
-        s.size
+        s.effective_scale()
     };
-    if let Some(win) = app.get_webview_window("main") {
-        let (w, h) = layout.window_size(size);
-        let _ = win.set_size(tauri::LogicalSize::new(w, h));
-    }
+    resize_main(app, layout, scale);
     crate::state::save(app);
-    if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
-        for (l, item) in &handles.layout_items {
-            let _ = item.set_checked(*l == layout);
-        }
-    }
     crate::tray::emit_state(app);
 }
 
-/// Single mutation path for the widget size — resizes the window for the
-/// current layout, persists, and syncs the tray's radio-style check items.
+/// Single mutation path for a size preset — clears any free-resize scale,
+/// resizes the window for the current layout, and persists.
 pub fn apply_size(app: &AppHandle, size: Size) {
-    let layout = {
+    let (layout, scale) = {
         let state = app.state::<AppState>();
         let mut s = state.0.lock().unwrap();
         s.size = size;
-        s.layout
+        s.custom_scale = None;
+        (s.layout, s.effective_scale())
     };
-    if let Some(win) = app.get_webview_window("main") {
-        let (w, h) = layout.window_size(size);
-        let _ = win.set_size(tauri::LogicalSize::new(w, h));
-    }
+    resize_main(app, layout, scale);
     crate::state::save(app);
-    if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
-        for (s, item) in &handles.size_items {
-            let _ = item.set_checked(*s == size);
-        }
-    }
     crate::tray::emit_state(app);
 }
 
-/// Single mutation path for the mascot — persists and syncs the tray's
-/// radio-style check items. The splash swaps artwork on the state change event.
+/// Single mutation path for the mascot — persists; the splash swaps artwork
+/// on the state change event.
 pub fn apply_mascot(app: &AppHandle, mascot: Mascot) {
     app.state::<AppState>().0.lock().unwrap().mascot = mascot;
     crate::state::save(app);
-    if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
-        for (m, item) in &handles.mascot_items {
-            let _ = item.set_checked(*m == mascot);
-        }
-    }
     crate::tray::emit_state(app);
 }
 
-/// Single mutation path for the tray icon style — persists, syncs the tray's
-/// radio-style check items, and re-renders the icon from the last poll result.
+/// Single mutation path for the tray icon style — persists and re-renders the
+/// icon from the last poll result.
 pub fn apply_tray_style(app: &AppHandle, style: TrayStyle) {
     let snapshot = {
         let state = app.state::<AppState>();
@@ -153,24 +233,27 @@ pub fn apply_tray_style(app: &AppHandle, style: TrayStyle) {
         s.last_usage.clone()
     };
     crate::state::save(app);
-    if let Some(handles) = app.try_state::<crate::tray::TrayHandles>() {
-        for (st, item) in &handles.tray_style_items {
-            let _ = item.set_checked(*st == style);
-        }
-    }
+    crate::tray::emit_state(app);
     if let Some(snapshot) = snapshot {
         crate::tray::update(app, &snapshot);
     }
 }
 
-/// Single mutation path for a work-day toggle (`day` is Sun..Sat = 0..6).
-/// Unlike layout/mascot these are independent checkboxes, so the tray item is
-/// already in its new state when the event fires — we just persist and emit.
-pub fn apply_work_day(app: &AppHandle, day: usize, on: bool) {
-    if day >= 7 {
+/// One step of the corner-grip drag (see main.ts): size the window for the
+/// requested logical width with the height locked to the layout's aspect
+/// ratio, so no drag can distort the widget. `commit` (the drag ending)
+/// persists the resulting free-resize scale.
+#[tauri::command]
+pub fn resize_widget(app: AppHandle, width: f64, commit: bool) {
+    if !width.is_finite() {
         return;
     }
-    app.state::<AppState>().0.lock().unwrap().work_days[day] = on;
-    crate::state::save(app);
-    crate::tray::emit_state(app);
+    let layout = app.state::<AppState>().0.lock().unwrap().layout;
+    let scale = layout.scale_for_width(width);
+    resize_main(&app, layout, scale);
+    if commit {
+        app.state::<AppState>().0.lock().unwrap().custom_scale = Some(scale);
+        crate::state::save(&app);
+        crate::tray::emit_state(&app);
+    }
 }

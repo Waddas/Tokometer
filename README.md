@@ -29,11 +29,13 @@
 - **Usage graph with a forecast** — click the mascot to flip it into a
   usage-over-time graph: gradient-coloured history, a dotted prediction at
   your current pace, the limit ceiling, your reset time, and a faint ghost of
-  the previous window for comparison.
-- **Stays out of the way** — frameless, draggable, optionally pinned above
-  the taskbar, hidden to the tray when you don't want it.
+  the previous window for comparison. Hover to read off the time and
+  percentage at any point.
+- **Stays out of the way** — frameless, draggable, freely resizable from the
+  corner grip, optionally pinned above the taskbar, hidden to the tray when
+  you don't want it.
 - **Six layouts** — mascot/graph beside, above, or below the tiles, or tiles
-  only.
+  only — all in a proper settings window.
 
 ## Showcase
 
@@ -50,11 +52,14 @@
 | Action | What it does |
 | --- | --- |
 | **Drag** the widget (or the ☰ handle) | Move it anywhere |
+| **Drag** the ↘ corner grip | Resize the widget to any scale |
 | **Click** the mascot | Flip between mascot and usage graph |
+| **Hover** the graph | Read the time and percentage under the cursor |
 | **Right-click** the graph | Switch between the 5-hour and 7-day windows |
 | **Right-click** the mascot | Pick a mascot (Clawd / Axolotl / Cat) |
-| **Hover** | Reveal pin-on-top, refresh, and hide buttons |
-| **Tray menu** | Show/hide, layout, mascot, pin, start at login, refresh, quit |
+| **Hover** | Reveal pin-on-top, refresh, settings, and hide buttons |
+| **Settings window** (⚙ or tray) | Layout, size, mascot, tray icon, work days, pin, start at login |
+| **Tray menu** | Show/hide, settings, refresh, check for updates, quit |
 
 The tray icon doubles as a status light — its bubble turns green/amber/red
 with your session usage, and the tooltip shows both live percentages.
@@ -67,13 +72,19 @@ with your session usage, and the tooltip shows both live percentages.
   `~/.claude/.credentials.json` (with `%LOCALAPPDATA%`/`%APPDATA%` fallbacks).
   Nothing is stored or sent anywhere else.
 - **Usage** — Anthropic's OAuth usage endpoint is polled once a minute for the
-  utilization and reset time of both windows, with rate-limit headers from a
-  minimal API probe as a fallback.
-- **History** — the API only reports *current* utilization, so the widget
-  accumulates its own time series locally (in the WebView's localStorage) to
-  draw the graph: full resolution for recent hours, thinned to one sample per
-  five minutes beyond that, capped at 15 days — enough for each view to show a
-  ghost of its previous window.
+  utilization and reset time of both windows, with an optional probe fallback
+  (below) when that endpoint fails.
+- **History** — the API only reports *current* utilization, so the app
+  accumulates its own time series locally (`history.json` next to its config)
+  to draw the graph: full resolution for recent hours, thinned to one sample
+  per five minutes beyond that, capped at 15 days — enough for each view to
+  show a ghost of its previous window. Each sample records its window's reset
+  time, so windows are compared by identity rather than wall-clock guesswork.
+- **Fallback probe** (optional, off by default) — if the free usage endpoint
+  fails, Tokometer can cross-check by sending a minimal 1-token `/v1/messages`
+  request and reading the rate-limit headers. It spends a sliver of the quota
+  it measures, so it's opt-in (Settings → Fallback usage probe) and never
+  fires more than once every 5 minutes.
 
 ## Install
 
@@ -118,9 +129,11 @@ Or with [Task](https://taskfile.dev/): `task install`, then `task dev`.
 - Press **D** in a dev build to toggle dev mode — a small badge in the strip
   above the widget shows the current state, and leaving dev mode resets it.
   While it's on:
-  - **M** toggles mocked usage data — a representative set of curves (bursts,
-    plateaus, a near-limit previous window) so you can iterate on the graph
-    without waiting for live history. Your real local history is untouched.
+  - **M** cycles the data source: mocked usage data — a representative set of
+    curves (bursts, plateaus, a near-limit previous window) so you can iterate
+    on the graph without waiting for live history — then a mocked API failure
+    (for the error status bar), then back to live. Your real local history is
+    untouched throughout.
   - **A** pins the mascot to a specific animation, cycling through all of
     them and back to the automatic rate-based rotation.
 - `task test` runs the frontend (Vitest) and Rust test suites; `task check`

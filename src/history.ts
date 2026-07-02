@@ -1,18 +1,9 @@
-// Usage-over-time sample log behind the graph. The backend only keeps the
-// latest snapshot, so the frontend accumulates one here, in localStorage.
-import type { UsageSnapshot } from "./api";
+// In-memory view of the usage-over-time log behind the graph. The backend
+// poller owns recording, retention and persistence (history.rs); this mirrors
+// its log at startup and appends live snapshots as they stream in, so the
+// graph never waits on a round-trip.
+import type { HistorySample, UsageSnapshot } from "./api";
 import type { Pt } from "./trend";
-
-interface Sample {
-  /** unix epoch ms */
-  ms: number;
-  /** 0-100 percent, null when the poll lacked that window */
-  five: number | null;
-  week: number | null;
-  /** each window's reset time (epoch ms); absent on samples from older builds */
-  fiveReset?: number | null;
-  weekReset?: number | null;
-}
 
 /** A completed usage window's samples, plus the reset time that identifies it. */
 export interface WindowSlice {
@@ -21,29 +12,17 @@ export interface WindowSlice {
   resetMs: number;
 }
 
-const KEY = "usage-history";
-const MAX_AGE_MS = 15 * 86_400_000; // current 7-day window plus the previous one (ghost line)
-const DENSE_AGE_MS = 6 * 3_600_000; // keep every sample this recent...
-const SPARSE_GAP_MS = 5 * 60_000; // ...thin older ones to one per 5 min
 const MIN_GAP_MS = 30_000; // collapse bursts (manual refreshes, replays)
 // Polls whose reset times are this close report the same window — absorbs
 // second-level jitter between the OAuth body and rate-limit-header sources.
 const RESET_TOLERANCE_MS = 90_000;
 
-type Store = Pick<Storage, "getItem" | "setItem">;
-
 export class UsageHistory {
-  private samples: Sample[] = [];
-  private storage: Store | null;
+  private samples: HistorySample[] = [];
 
-  constructor(storage: Store | null = globalThis.localStorage ?? null) {
-    this.storage = storage;
-    try {
-      const raw = this.storage?.getItem(KEY);
-      if (raw) this.samples = JSON.parse(raw) as Sample[];
-    } catch {
-      this.samples = [];
-    }
+  /** Replace the log with the backend's (startup, or after migration). */
+  load(samples: HistorySample[]): void {
+    this.samples = [...samples];
   }
 
   /** Record a snapshot at its fetch time; near-duplicates are dropped. */
@@ -59,12 +38,6 @@ export class UsageHistory {
       fiveReset: s.fiveHour?.resetAt != null ? s.fiveHour.resetAt * 1000 : null,
       weekReset: s.sevenDay?.resetAt != null ? s.sevenDay.resetAt * 1000 : null,
     });
-    this.prune(now);
-    try {
-      this.storage?.setItem(KEY, JSON.stringify(this.samples));
-    } catch {
-      // Quota or private mode: the in-memory log still works.
-    }
   }
 
   /** Points for one usage window since `startMs`, oldest first. */
@@ -112,17 +85,5 @@ export class UsageHistory {
       pts.push({ ms: s.ms, pct });
     }
     return pts.length >= 2 ? { pts, resetMs } : null;
-  }
-
-  private prune(now: number): void {
-    const kept: Sample[] = [];
-    for (const s of this.samples) {
-      const age = now - s.ms;
-      if (age > MAX_AGE_MS) continue;
-      const last = kept[kept.length - 1];
-      if (age > DENSE_AGE_MS && last && s.ms - last.ms < SPARSE_GAP_MS) continue;
-      kept.push(s);
-    }
-    this.samples = kept;
   }
 }

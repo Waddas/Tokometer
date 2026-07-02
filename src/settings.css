@@ -1,0 +1,141 @@
+/* Settings window — same palette and typeface as the widget (styles.css). */
+@font-face {
+  font-family: "Grotesk";
+  src: url("./fonts/SpaceGrotesk-Subset.ttf") format("truetype");
+}
+
+:root {
+  --bg: #000000;
+  --panel: #1f1f1e;
+  --text: #faf9f5;
+  --dim: #b0aea5;
+  --accent: #d97757;
+  --track: #2a2a28;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 400 13px/1.5 Grotesk, sans-serif;
+  height: 100%;
+}
+
+main {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+section {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+h2 {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--accent);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.options button {
+  border: 1px solid var(--track);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.options button:hover {
+  background: var(--track);
+  color: var(--text);
+}
+
+.options button.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.hint {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.hint.indent {
+  margin-left: 21px;
+}
+
+.version {
+  color: var(--dim);
+  font-size: 11px;
+  text-align: center;
+}
+
+.days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.days label {
+  border: 1px solid var(--track);
+  border-radius: 6px;
+  color: var(--dim);
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.days label.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.days input {
+  display: none;
+}
