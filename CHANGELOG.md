@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/Waddas/Tokometer/compare/v1.1.0...v1.2.0) (2026-07-02)
+
+
+### Features
+
+* settings window, free resize, graph hover readout, backend history, and error UX ([#6](https://github.com/Waddas/Tokometer/issues/6)) ([e7130b2](https://github.com/Waddas/Tokometer/commit/e7130b2c871f94cc71dcacbe18b4395d680b0db1))
+
+
+### Bug Fixes
+
+* anchor graph ghost line to actual usage window boundaries ([#5](https://github.com/Waddas/Tokometer/issues/5)) ([37e2f1e](https://github.com/Waddas/Tokometer/commit/37e2f1e7e0a1f1eab39863181be4a5b92cb11342))
+
 ## [1.1.0](https://github.com/Waddas/Tokometer/compare/v1.0.0...v1.1.0) (2026-06-22)
 
 
