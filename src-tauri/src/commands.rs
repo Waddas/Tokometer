@@ -161,9 +161,12 @@ pub fn show_settings(app: &AppHandle) {
     .resizable(false)
     .maximizable(false)
     .minimizable(false)
-    // Born hidden: the webview flashes white before first paint, so the page
-    // shows itself once its first render has landed (settings.ts).
+    // Born hidden, and black underneath: the page shows itself once its
+    // first render has landed (settings.ts), but the webview can still
+    // surface before its first paint — a native background in the page's
+    // colour keeps that moment invisible instead of a white flash.
     .visible(false)
+    .background_color(tauri::window::Color(0, 0, 0, 255))
     .build();
 }
 
