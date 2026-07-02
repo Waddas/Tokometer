@@ -110,6 +110,12 @@ h2 {
   margin-left: 21px;
 }
 
+.version {
+  color: var(--dim);
+  font-size: 11px;
+  text-align: center;
+}
+
 .days {
   display: flex;
   flex-wrap: wrap;

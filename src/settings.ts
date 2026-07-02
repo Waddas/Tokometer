@@ -3,6 +3,7 @@
 // commands the widget uses, and re-renders on state://change so edits made
 // from the widget (pin button, corner resize) stay in sync.
 import "./settings.css";
+import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./api";
 
@@ -131,3 +132,6 @@ void api
   });
 void api.onStateChange(render);
 void api.getAutostart().then((on) => (autostartBox.checked = on));
+void getVersion().then((v) => {
+  document.getElementById("version")!.textContent = `Tokometer ${v}`;
+});

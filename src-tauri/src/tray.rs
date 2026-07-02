@@ -32,6 +32,13 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    // Disabled: the version is information, not an action.
+    let version = MenuItem::new(
+        app,
+        format!("Tokometer {}", app.package_info().version),
+        false,
+        None::<&str>,
+    )?;
     // Dev/screenshot aid: hide the dev badge for clean captures. Debug builds
     // only — release builds never draw the badge (see main.ts).
     let hide_devbar = if cfg!(debug_assertions) {
@@ -56,6 +63,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         &sep_bottom as &dyn IsMenuItem<Wry>,
         &refresh,
         &check_updates,
+        &version,
         &quit,
     ]);
     let menu = Menu::with_items(app, &items)?;
