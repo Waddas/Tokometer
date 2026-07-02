@@ -303,6 +303,9 @@ body:hover #resize-handle {
   bottom: calc(14px * var(--bezel));
   padding: 3px 10px 4px;
   background: rgba(31, 31, 30, 0.92);
+  /* A bezel-coloured rim so the bar reads as its own chip instead of
+   * blending into the tiles it overlaps. */
+  border: 2px solid var(--bg);
   border-radius: calc(8px * var(--chrome));
   color: var(--dim);
   font: 400 10px/1.3 Grotesk, sans-serif;
