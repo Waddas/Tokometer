@@ -161,6 +161,9 @@ pub fn show_settings(app: &AppHandle) {
     .resizable(false)
     .maximizable(false)
     .minimizable(false)
+    // Born hidden: the webview flashes white before first paint, so the page
+    // shows itself once its first render has landed (settings.ts).
+    .visible(false)
     .build();
 }
 

@@ -3,6 +3,7 @@
 // commands the widget uses, and re-renders on state://change so edits made
 // from the widget (pin button, corner resize) stay in sync.
 import "./settings.css";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./api";
 
 const LAYOUTS: [api.Layout, string][] = [
@@ -115,6 +116,17 @@ function render(prefs: api.Preferences) {
   }
 }
 
-void api.getState().then(render);
+// The window is created hidden (commands.rs) because the webview flashes
+// white before first paint; reveal it once the first render is on screen —
+// or regardless if get_state fails, so the window can never stay invisible.
+void api
+  .getState()
+  .then(render)
+  .finally(() => {
+    requestAnimationFrame(() => {
+      const win = getCurrentWindow();
+      void win.show().then(() => win.setFocus());
+    });
+  });
 void api.onStateChange(render);
 void api.getAutostart().then((on) => (autostartBox.checked = on));
