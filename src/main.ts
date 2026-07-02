@@ -236,12 +236,14 @@ void api.onUsage((s) => {
 });
 
 /* ---- dev: D toggles dev mode, shown as a badge in the top strip. While on,
- * M toggles mocked data and A cycles the mascot animation; leaving dev mode
- * resets both. ---- */
+ * M cycles the data source (live → mock → error) and A cycles the mascot
+ * animation; leaving dev mode resets both. ---- */
 if (import.meta.env.DEV) {
   let devMode = false;
   let pinnedAnim = -1; // -1 = automatic rate-grouped rotation
   let barHidden = false; // tray "Hide dev bar" — keeps dev mode on for captures
+  const SOURCES = ["live", "mock", "error"] as const;
+  let devSource: (typeof SOURCES)[number] = "live";
 
   const badge = document.createElement("div");
   badge.id = "dev-badge";
@@ -251,7 +253,7 @@ if (import.meta.env.DEV) {
   function renderBadge() {
     badge.hidden = !devMode || barHidden;
     const anim = pinnedAnim === -1 ? "auto" : splash.animationNames()[pinnedAnim];
-    badge.textContent = `dev · ${mockActive ? "mock" : "live"} · ${anim}`;
+    badge.textContent = `dev · ${devSource} · ${anim}`;
   }
 
   void api.onDevBarHidden((hidden) => {
@@ -259,15 +261,34 @@ if (import.meta.env.DEV) {
     renderBadge();
   });
 
-  const setMock = (on: boolean) =>
+  // A snapshot shaped like a failed poll, for iterating on the error UX.
+  const errorSnapshot = (): api.UsageSnapshot => ({
+    status: "error",
+    source: null,
+    fetchedAt: Date.now(),
+    fiveHour: null,
+    sevenDay: null,
+    fiveHourStatus: null,
+    error: "mocked failure (dev): usage API unreachable",
+  });
+
+  const setSource = (src: (typeof SOURCES)[number]) =>
     import("./mock").then(({ MockHistory }) => {
-      if (mockActive === on) return;
-      mockActive = on;
-      if (on) {
+      if (devSource === src) return;
+      devSource = src;
+      mockActive = src !== "live";
+      if (src === "mock") {
         const mock = new MockHistory();
         graph.setHistory(mock);
         applySnapshot(mock.snapshot);
         void api.setTrayOverride(mock.snapshot);
+      } else if (src === "error") {
+        // The real history stays under the graph, as it would on a live
+        // failure; only the snapshot reports the outage.
+        graph.setHistory(history);
+        const snap = errorSnapshot();
+        applySnapshot(snap);
+        void api.setTrayOverride(snap);
       } else {
         graph.setHistory(history);
         if (lastReal) applySnapshot(lastReal);
@@ -288,13 +309,14 @@ if (import.meta.env.DEV) {
       case "d":
         devMode = !devMode;
         if (!devMode) {
-          void setMock(false);
+          void setSource("live");
           setAnim(-1);
         }
         renderBadge();
         break;
       case "m":
-        if (devMode) void setMock(!mockActive);
+        if (devMode)
+          void setSource(SOURCES[(SOURCES.indexOf(devSource) + 1) % SOURCES.length]);
         break;
       case "a":
         if (devMode) {

@@ -129,9 +129,11 @@ Or with [Task](https://taskfile.dev/): `task install`, then `task dev`.
 - Press **D** in a dev build to toggle dev mode — a small badge in the strip
   above the widget shows the current state, and leaving dev mode resets it.
   While it's on:
-  - **M** toggles mocked usage data — a representative set of curves (bursts,
-    plateaus, a near-limit previous window) so you can iterate on the graph
-    without waiting for live history. Your real local history is untouched.
+  - **M** cycles the data source: mocked usage data — a representative set of
+    curves (bursts, plateaus, a near-limit previous window) so you can iterate
+    on the graph without waiting for live history — then a mocked API failure
+    (for the error status bar), then back to live. Your real local history is
+    untouched throughout.
   - **A** pins the mascot to a specific animation, cycling through all of
     them and back to the automatic rate-based rotation.
 - `task test` runs the frontend (Vitest) and Rust test suites; `task check`
