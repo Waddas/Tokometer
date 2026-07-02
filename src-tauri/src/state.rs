@@ -65,7 +65,7 @@ impl Layout {
 
     /// Logical window size: the layout's design space scaled by `scale`, plus
     /// the 28px strip above the widget that hosts the hover controls. The
-    /// frontend recomputes `--scale` from the resized width.
+    /// frontend recomputes its scale (`--chrome`) from the resized width.
     pub fn window_size(self, scale: f64) -> (f64, f64) {
         const CONTROLS_STRIP: f64 = 28.0;
         let (w, h) = self.design_size();
@@ -81,7 +81,7 @@ impl Layout {
 
 /// Overall widget scale. Small is the original 2/3 of the design space;
 /// Medium and Large step around it. The window resize alone drives the
-/// frontend's `--scale`, so the content fills whichever size is chosen.
+/// frontend's layout, so the content fills whichever size is chosen.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Size {

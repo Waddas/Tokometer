@@ -27,7 +27,9 @@ const graph = new UsageGraph(document.getElementById("graph") as HTMLCanvasEleme
 /* ---- layouts ----
  * Each layout has its own design-space width (geometry in styles.css); the
  * window is the design space scaled by the chosen Size (factors in state.rs).
- * `--scale` is derived from the resized width, so any size fills correctly. */
+ * `--chrome` is derived from the resized width: margins, gaps and radii track
+ * small widgets down but stop growing past design size, so large widgets put
+ * the room into content instead of bezels. */
 const DESIGN_WIDTH: Record<api.Layout, number> = {
   "mascot-left": 282,
   "mascot-right": 282,
@@ -40,10 +42,8 @@ const DESIGN_WIDTH: Record<api.Layout, number> = {
 let layout: api.Layout = "mascot-left";
 
 function updateScale() {
-  document.documentElement.style.setProperty(
-    "--scale",
-    String(window.innerWidth / DESIGN_WIDTH[layout]),
-  );
+  const scale = window.innerWidth / DESIGN_WIDTH[layout];
+  document.documentElement.style.setProperty("--chrome", String(Math.min(1, scale)));
 }
 window.addEventListener("resize", updateScale);
 
