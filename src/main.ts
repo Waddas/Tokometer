@@ -184,11 +184,11 @@ function friendlyError(err: string): string {
 }
 
 function renderStatus(s: api.UsageSnapshot) {
-  if (s.status === "ok") {
-    statusEl.hidden = true;
-    return;
-  }
-  statusEl.hidden = false;
+  const failing = s.status !== "ok";
+  statusEl.hidden = !failing;
+  // The content grid reserves a band for the bar while it's up (styles.css).
+  root.classList.toggle("has-status", failing);
+  if (!failing) return;
   statusEl.textContent = friendlyError(s.error ?? "");
   statusEl.title = s.error ?? "";
 }

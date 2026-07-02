@@ -293,19 +293,21 @@ body:hover #resize-handle {
 }
 
 /* ---- status bar: friendly error / first-run guidance (real pixels).
- * A bar inset to the content area so the bezel stays visible around it,
- * cornered like the tiles; ellipsized to one line, raw error in the title
- * tooltip. ---- */
+ * A docked row: while it's up, #content reserves a band for it (below), so
+ * the bar sits in its own space — aligned and cornered like the tiles —
+ * instead of overlapping them. Ellipsized to one line, raw error in the
+ * title tooltip. ---- */
+:root {
+  --status-h: 20px; /* the bar's fixed height, shared with the #content inset */
+}
 #status {
   position: absolute;
   left: calc(14px * var(--bezel));
   right: calc(14px * var(--bezel));
   bottom: calc(14px * var(--bezel));
+  height: var(--status-h);
   padding: 3px 10px 4px;
-  background: rgba(31, 31, 30, 0.92);
-  /* A bezel-coloured rim so the bar reads as its own chip instead of
-   * blending into the tiles it overlaps. */
-  border: 2px solid var(--bg);
+  background: var(--panel);
   border-radius: calc(8px * var(--chrome));
   color: var(--dim);
   font: 400 10px/1.3 Grotesk, sans-serif;
@@ -313,6 +315,11 @@ body:hover #resize-handle {
   overflow: hidden;
   text-overflow: ellipsis;
   z-index: 9;
+}
+/* The reserved band: bezel-sized gap above the bar, bar, then its bottom
+ * inset — main.ts toggles the class with the bar's visibility. */
+#root.has-status #content {
+  padding-bottom: calc(var(--status-h) + 24px * var(--bezel));
 }
 #status::before {
   /* amber dot: reads as "attention" without shouting */
