@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/Waddas/Tokometer/compare/v1.2.0...v1.2.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* WebView2 settings deadlock, debounce transient poll failures, and ghost lapsed usage windows ([#8](https://github.com/Waddas/Tokometer/issues/8)) ([6b7212f](https://github.com/Waddas/Tokometer/commit/6b7212f0bd65fab3d50a8a04bbf1b6515b31a2ea))
+
 ## [1.2.0](https://github.com/Waddas/Tokometer/compare/v1.1.0...v1.2.0) (2026-07-02)
 
 
