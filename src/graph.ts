@@ -131,7 +131,10 @@ export class UsageGraph {
     const cfg = MODE[this.mode];
     const now = Date.now();
     const win = this.mode === "session" ? this.snapshot?.fiveHour : this.snapshot?.sevenDay;
-    const end = win?.resetAt ? win.resetAt * 1000 : now;
+    // No reset time means no window is running (the last one lapsed and
+    // nothing has started a new one); the axes then track the current moment.
+    const resetMs = win?.resetAt ? win.resetAt * 1000 : null;
+    const end = resetMs ?? now;
     const start = end - cfg.windowMs;
     const x = (ms: number) => pad + ((ms - start) / cfg.windowMs) * (w - 2 * pad);
     const y = (pct: number) => h - pad - (pct / 100) * (h - 2 * pad);
@@ -161,16 +164,19 @@ export class UsageGraph {
     // the two windows' reset times (windows have a fixed width, so their
     // starts align too). Segmenting by the reset time each sample was polled
     // with — rather than assuming windows sit back-to-back — keeps a lapsed
-    // window's tail from bleeding into the start of the current one.
-    if (win?.resetAt) {
-      const prev = this.history.previousWindow(cfg.key, win.resetAt * 1000, cfg.windowMs);
+    // window's tail from bleeding into the start of the current one. While
+    // no window is running there is no reset to align to, so the ghost sits
+    // at its true time and slides into the past as the axes track "now".
+    if (win) {
+      const prev = this.history.previousWindow(cfg.key, resetMs, cfg.windowMs);
       if (prev && prev.pts.some((p) => p.pct >= GHOST_MIN_PEAK_PCT)) {
-        const shift = end - prev.resetMs;
+        const shift = resetMs === null ? 0 : end - prev.resetMs;
+        const ghost = prev.pts.filter((p) => p.ms + shift >= start);
         ctx.strokeStyle = this.dim;
         ctx.globalAlpha = 0.3;
         ctx.lineWidth = 2 * c;
         ctx.beginPath();
-        for (const [i, p] of prev.pts.entries()) {
+        for (const [i, p] of ghost.entries()) {
           const gx = x(p.ms + shift);
           if (i === 0) ctx.moveTo(gx, y(p.pct));
           else ctx.lineTo(gx, y(p.pct));
@@ -181,7 +187,7 @@ export class UsageGraph {
     }
 
     // The limit ceiling, and a thin marker at the reset time.
-    if (win?.resetAt) {
+    if (resetMs !== null) {
       ctx.strokeStyle = this.dim;
       ctx.lineWidth = c;
       ctx.beginPath();
@@ -207,7 +213,7 @@ export class UsageGraph {
     gradient.addColorStop(AMBER_AT_PCT / 100, this.amber);
     gradient.addColorStop(RED_AT_PCT / 100, this.red);
 
-    const pts = this.history.points(cfg.key, start).filter((p) => p.ms <= now);
+    const pts = this.history.points(cfg.key, start, resetMs).filter((p) => p.ms <= now);
     pts.push({ ms: Math.min(now, end), pct: win.utilization });
 
     // Soft area fill anchors the line to the baseline.

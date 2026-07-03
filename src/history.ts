@@ -40,12 +40,26 @@ export class UsageHistory {
     });
   }
 
-  /** Points for one usage window since `startMs`, oldest first. */
-  points(key: "five" | "week", startMs: number): Pt[] {
+  /**
+   * Points for one usage window since `startMs`, oldest first. Samples
+   * stamped with a different reset time belong to another window and are
+   * dropped: after a window lapses (`currentResetMs` null, so nothing is
+   * running) every stamped sample is some finished window's, and only the
+   * unstamped zero-usage polls of the lapse itself remain. Samples from
+   * older builds carry no reset time and are kept on the time filter alone.
+   */
+  points(key: "five" | "week", startMs: number, currentResetMs: number | null): Pt[] {
+    const resetKey = key === "five" ? "fiveReset" : "weekReset";
     const pts: Pt[] = [];
     for (const s of this.samples) {
       const pct = s[key];
-      if (s.ms >= startMs && pct !== null) pts.push({ ms: s.ms, pct });
+      if (s.ms < startMs || pct === null) continue;
+      const r = s[resetKey];
+      if (r != null) {
+        if (currentResetMs === null) continue;
+        if (Math.abs(r - currentResetMs) > RESET_TOLERANCE_MS) continue;
+      }
+      pts.push({ ms: s.ms, pct });
     }
     return pts;
   }
@@ -54,13 +68,14 @@ export class UsageHistory {
    * The most recent window that completed before the current one, segmented
    * by the reset time each sample was polled with — windows start whenever
    * the first message after a lapse lands, so wall-clock arithmetic can't
-   * find their boundaries. Returns null when history holds no such window
-   * with at least two points (samples from older builds carry no reset time
-   * and are never segmented).
+   * find their boundaries. A null `currentResetMs` means no window is
+   * running (it lapsed), so the latest recorded window is the previous one.
+   * Returns null when history holds no such window with at least two points
+   * (samples from older builds carry no reset time and are never segmented).
    */
   previousWindow(
     key: "five" | "week",
-    currentResetMs: number,
+    currentResetMs: number | null,
     windowMs: number,
   ): WindowSlice | null {
     const resetKey = key === "five" ? "fiveReset" : "weekReset";
@@ -68,7 +83,7 @@ export class UsageHistory {
     for (let i = this.samples.length - 1; i >= 0; i--) {
       const r = this.samples[i][resetKey];
       if (r == null || this.samples[i][key] === null) continue;
-      if (r < currentResetMs - RESET_TOLERANCE_MS) {
+      if (currentResetMs === null || r < currentResetMs - RESET_TOLERANCE_MS) {
         resetMs = r;
         break;
       }

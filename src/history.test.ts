@@ -27,19 +27,19 @@ describe("UsageHistory", () => {
     const h = new UsageHistory();
     h.sample(snapshot(0, 10, 5), 0);
     h.sample(snapshot(MIN, 12, null), MIN);
-    expect(h.points("five", 0)).toEqual([
+    expect(h.points("five", 0, null)).toEqual([
       { ms: 0, pct: 10 },
       { ms: MIN, pct: 12 },
     ]);
     // Null windows are skipped per key, not dropped entirely.
-    expect(h.points("week", 0)).toEqual([{ ms: 0, pct: 5 }]);
+    expect(h.points("week", 0, null)).toEqual([{ ms: 0, pct: 5 }]);
   });
 
   it("filters points by window start", () => {
     const h = new UsageHistory();
     h.sample(snapshot(0, 10, null), 0);
     h.sample(snapshot(10 * MIN, 20, null), 10 * MIN);
-    expect(h.points("five", 5 * MIN)).toEqual([{ ms: 10 * MIN, pct: 20 }]);
+    expect(h.points("five", 5 * MIN, null)).toEqual([{ ms: 10 * MIN, pct: 20 }]);
   });
 
   it("ignores error snapshots and near-duplicate fetches", () => {
@@ -47,7 +47,26 @@ describe("UsageHistory", () => {
     h.sample(snapshot(0, 10, null), 0);
     h.sample(snapshot(0, 10, null), 5_000); // startup replay of the same poll
     h.sample({ ...snapshot(MIN, 50, null), status: "error" }, MIN);
-    expect(h.points("five", 0)).toHaveLength(1);
+    expect(h.points("five", 0, null)).toHaveLength(1);
+  });
+
+  it("segments points by the current reset time, dropping other windows'", () => {
+    const h = new UsageHistory();
+    const HOUR = 60 * MIN;
+    h.sample(snapshot(1 * HOUR, 80, null, (6 * HOUR) / 1000), 1 * HOUR);
+    h.sample(snapshot(8 * HOUR, 5, null, (13 * HOUR) / 1000), 8 * HOUR);
+    expect(h.points("five", 0, 13 * HOUR)).toEqual([{ ms: 8 * HOUR, pct: 5 }]);
+    // Unstamped legacy samples survive on the time filter alone.
+    h.sample(snapshot(9 * HOUR, 12, null), 9 * HOUR);
+    expect(h.points("five", 0, 13 * HOUR)).toHaveLength(2);
+  });
+
+  it("keeps only unstamped samples while no window is running", () => {
+    const h = new UsageHistory();
+    const HOUR = 60 * MIN;
+    h.sample(snapshot(1 * HOUR, 80, null, (6 * HOUR) / 1000), 1 * HOUR);
+    h.sample(snapshot(7 * HOUR, 0, null), 7 * HOUR); // polled during the lapse
+    expect(h.points("five", 0, null)).toEqual([{ ms: 7 * HOUR, pct: 0 }]);
   });
 
   it("serves the backend log after load, replacing prior samples", () => {
@@ -57,7 +76,7 @@ describe("UsageHistory", () => {
       { ms: 0, five: 10, week: null },
       { ms: MIN, five: 12, week: 3, fiveReset: 5 * 60 * MIN * 1000 },
     ]);
-    expect(h.points("five", 0)).toEqual([
+    expect(h.points("five", 0, 5 * 60 * MIN * 1000)).toEqual([
       { ms: 0, pct: 10 },
       { ms: MIN, pct: 12 },
     ]);
@@ -104,6 +123,15 @@ describe("previousWindow", () => {
     h.sample(snapshot(2 * HOUR, 30, null, sec(6 * HOUR) + 45), 2 * HOUR);
     h.sample(snapshot(8 * HOUR, 5, null, sec(13 * HOUR)), 8 * HOUR);
     const prev = h.previousWindow("five", 13 * HOUR, WINDOW)!;
+    expect(prev.pts).toHaveLength(2);
+  });
+
+  it("serves the latest completed window when no window is running", () => {
+    const h = new UsageHistory();
+    h.sample(snapshot(1 * HOUR, 10, null, sec(6 * HOUR)), 1 * HOUR);
+    h.sample(snapshot(5 * HOUR, 80, null, sec(6 * HOUR)), 5 * HOUR);
+    const prev = h.previousWindow("five", null, WINDOW)!;
+    expect(prev.resetMs).toBe(6 * HOUR);
     expect(prev.pts).toHaveLength(2);
   });
 
