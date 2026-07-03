@@ -187,6 +187,13 @@ body {
   color: var(--dim);
 }
 
+/* While polling fails the tiles keep the last known values, faded so stale
+ * data can't be mistaken for live. */
+#root.stale .pct,
+#root.stale .reset {
+  opacity: 0.55;
+}
+
 /* ---- grab handle: dragging, since the tiles now react to clicks ---- */
 #drag-handle {
   position: absolute;
