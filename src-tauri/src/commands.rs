@@ -151,23 +151,31 @@ pub fn show_settings(app: &AppHandle) {
         let _ = win.set_focus();
         return;
     }
-    let _ = tauri::WebviewWindowBuilder::new(
-        app,
-        "settings",
-        tauri::WebviewUrl::App("settings.html".into()),
-    )
-    .title("Tokometer Settings")
-    .inner_size(420.0, 620.0)
-    .resizable(false)
-    .maximizable(false)
-    .minimizable(false)
-    // Born hidden, and black underneath: the page shows itself once its
-    // first render has landed (settings.ts), but the webview can still
-    // surface before its first paint — a native background in the page's
-    // colour keeps that moment invisible instead of a white flash.
-    .visible(false)
-    .background_color(tauri::window::Color(0, 0, 0, 255))
-    .build();
+    // Build from a worker task, never the caller's thread: commands and tray
+    // menu events run on the main thread, and creating a WebView2 there
+    // deadlocks Windows (wry#583) because creation needs the event loop the
+    // caller is blocking. From a worker, tauri dispatches creation through
+    // the event loop safely on every platform.
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = tauri::WebviewWindowBuilder::new(
+            &app,
+            "settings",
+            tauri::WebviewUrl::App("settings.html".into()),
+        )
+        .title("Tokometer Settings")
+        .inner_size(420.0, 620.0)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        // Born hidden, and black underneath: the page shows itself once its
+        // first render has landed (settings.ts), but the webview can still
+        // surface before its first paint — a native background in the page's
+        // colour keeps that moment invisible instead of a white flash.
+        .visible(false)
+        .background_color(tauri::window::Color(0, 0, 0, 255))
+        .build();
+    });
 }
 
 fn resize_main(app: &AppHandle, layout: Layout, scale: f64) {
