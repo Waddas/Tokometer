@@ -138,6 +138,10 @@ Or with [Task](https://taskfile.dev/): `task install`, then `task dev`.
     them and back to the automatic rate-based rotation.
 - `task test` runs the frontend (Vitest) and Rust test suites; `task check`
   adds typechecking and linting.
+- `task test:e2e` (Windows only) builds a debug app under a separate identifier
+  and drives the real UI over the WebView2 devtools protocol — it opens the
+  settings window from the widget and asserts the app stays responsive, which
+  unit tests can't cover.
 
 ### Build
 

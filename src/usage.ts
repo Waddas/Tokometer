@@ -39,13 +39,15 @@ export class UsageRenderer {
     setInterval(() => this.renderResets(), 30_000);
   }
 
-  update(s: UsageSnapshot): void {
+  /** Render a snapshot; `stale` drains the threshold colours to grey, for
+   *  showing the last known values while polling fails. */
+  update(s: UsageSnapshot, stale = false): void {
     this.snapshot = s;
-    this.renderPanel(this.panels.session, s.fiveHour);
-    this.renderPanel(this.panels.weekly, s.sevenDay);
+    this.renderPanel(this.panels.session, s.fiveHour, stale);
+    this.renderPanel(this.panels.weekly, s.sevenDay, stale);
   }
 
-  private renderPanel(els: PanelEls, w: UsageWindow | null): void {
+  private renderPanel(els: PanelEls, w: UsageWindow | null, stale: boolean): void {
     if (!w) {
       els.pct.textContent = "--%";
       els.pct.style.color = "var(--dim)";
@@ -54,7 +56,7 @@ export class UsageRenderer {
     }
     const pct = Math.round(w.utilization);
     els.pct.textContent = `${pct}%`;
-    els.pct.style.color = pctColor(pct);
+    els.pct.style.color = stale ? "var(--dim)" : pctColor(pct);
     els.reset.textContent = this.resetText(w);
   }
 

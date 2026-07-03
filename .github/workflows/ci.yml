@@ -55,3 +55,29 @@ jobs:
           workspaces: src-tauri
 
       - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  # Launches the real app and drives it over the WebView2 devtools protocol:
+  # opens the settings window from the widget's button and asserts the app
+  # stays responsive. Windows-only — it's the platform where webview creation
+  # can deadlock the event loop (wry#583), and the one least often tested by
+  # hand during development.
+  test-e2e:
+    name: E2E Smoke (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+      - run: npm run tauri build -- --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
+      - run: npm run test:e2e

@@ -17,7 +17,8 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml"
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:e2e": "node e2e/settings-window.e2e.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0"

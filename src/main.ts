@@ -196,12 +196,20 @@ function renderStatus(s: api.UsageSnapshot) {
 /* ---- data wiring ---- */
 let mockActive = false;
 let lastReal: api.UsageSnapshot | null = null;
+/** Last successful poll — what stays on screen, greyed, while polling fails. */
+let lastOk: api.UsageSnapshot | null = null;
 
 function applySnapshot(s: api.UsageSnapshot) {
-  usage.update(s);
+  const stale = s.status !== "ok";
+  if (!stale && !mockActive) lastOk = s;
+  // A failed poll carries no windows; keep the last known values up instead
+  // of blanking the tiles and graph, drained to grey by the stale flag.
+  const shown = stale && lastOk ? lastOk : s;
+  usage.update(shown, stale);
+  root.classList.toggle("stale", stale);
   renderStatus(s);
   if (!mockActive) history.sample(s);
-  graph.update(s);
+  graph.update(shown);
   if (s.status === "ok" && s.fiveHour) {
     rate.sample(s.fiveHour.utilization);
     splash.setGroup(rate.group());

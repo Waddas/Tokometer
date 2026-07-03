@@ -9,6 +9,10 @@ use crate::usage::{self, UsageSnapshot};
 pub struct RefreshSignal(pub Arc<Notify>);
 
 const POLL_INTERVAL: Duration = Duration::from_secs(60);
+/// A single failed poll usually self-heals by the next tick, so while good
+/// data is on screen the error state is held back until this many polls in a
+/// row have failed. With nothing good to show, an error surfaces immediately.
+const ERROR_GRACE_POLLS: u32 = 3;
 /// The fallback probe consumes quota, so even when opted in it never fires
 /// more than once per this interval while the usage endpoint stays down.
 const PROBE_MIN_INTERVAL_MS: i64 = 5 * 60_000;
@@ -25,6 +29,7 @@ pub fn spawn(app: AppHandle) {
             .build()
             .expect("failed to build http client");
         let mut last_probe_ms: i64 = 0;
+        let mut consecutive_failures: u32 = 0;
         loop {
             let probe_allowed = {
                 let state = app.state::<crate::state::AppState>();
@@ -34,6 +39,20 @@ pub fn spawn(app: AppHandle) {
             let (snapshot, probed) = poll_once(&client, probe_allowed).await;
             if probed {
                 last_probe_ms = usage::now_ms();
+            }
+            if snapshot.status == "ok" {
+                consecutive_failures = 0;
+            } else {
+                consecutive_failures += 1;
+                let showing_good_data = {
+                    let state = app.state::<crate::state::AppState>();
+                    let s = state.0.lock().unwrap();
+                    s.last_usage.as_ref().is_some_and(|u| u.status == "ok")
+                };
+                if showing_good_data && consecutive_failures < ERROR_GRACE_POLLS {
+                    let _ = tokio::time::timeout(POLL_INTERVAL, notify.notified()).await;
+                    continue;
+                }
             }
             {
                 let state = app.state::<crate::state::AppState>();

@@ -76,6 +76,12 @@ tasks:
     cmds:
       - cargo test --manifest-path {{.CARGO_MANIFEST}}
 
+  test:e2e:
+    desc: Build a debug app and drive it end-to-end over CDP (Windows only)
+    cmds:
+      - npm run tauri build -- --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
+      - npm run test:e2e
+
   typecheck:
     desc: Type-check the frontend without emitting output
     cmds:

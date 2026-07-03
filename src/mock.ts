@@ -82,7 +82,11 @@ export class MockHistory {
     return (key === "five" ? this.five : this.week).filter((p) => p.ms >= startMs);
   }
 
-  previousWindow(key: "five" | "week", _currentResetMs: number, windowMs: number): WindowSlice | null {
+  previousWindow(
+    key: "five" | "week",
+    _currentResetMs: number | null,
+    windowMs: number,
+  ): WindowSlice | null {
     const resetMs = key === "five" ? this.prevFiveReset : this.prevWeekReset;
     const pts = (key === "five" ? this.five : this.week).filter(
       (p) => p.ms <= resetMs && p.ms >= resetMs - windowMs,
