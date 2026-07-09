@@ -26,6 +26,15 @@ pub fn spawn_check(app: AppHandle) {
 /// `manual` surfaces progress and the up-to-date / failure result in the tray
 /// status line; the silent startup check leaves it untouched.
 async fn check_and_install(app: AppHandle, manual: bool) {
+    // Dev builds must never self-update: a checkout older than the newest
+    // GitHub release would silently install it over the debug binary and
+    // restart, killing `tauri dev` ~10s after launch.
+    if cfg!(debug_assertions) {
+        if manual {
+            set_status(&app, "Updates disabled in dev builds");
+        }
+        return;
+    }
     let updater = match app.updater() {
         Ok(updater) => updater,
         Err(e) => {
