@@ -199,7 +199,7 @@ pub struct PersistedState {
     #[serde(default = "all_work_days")]
     pub work_days: [bool; 7],
     /// Whether a failing usage endpoint may fall back to a minimal (1-token,
-    /// quota-consuming) `/v1/messages` probe. Off by default.
+    /// quota-consuming) `/v1/messages` probe. On by default.
     pub probe_fallback: bool,
     pub last_usage: Option<UsageSnapshot>,
 }
@@ -226,7 +226,7 @@ impl Default for PersistedState {
             mascot: Mascot::default(),
             tray_style: TrayStyle::default(),
             work_days: all_work_days(),
-            probe_fallback: false,
+            probe_fallback: true,
             last_usage: None,
         }
     }
@@ -441,8 +441,9 @@ mod tests {
         assert_eq!(s.work_days, [true; 7]);
         assert!(s.window.is_none());
         assert!(s.custom_scale.is_none());
-        // The probe costs quota, so upgrades must not silently enable it.
-        assert!(!s.probe_fallback);
+        // On by default so the app keeps working when the usage endpoint
+        // rate-limits; the probe is cheap (1 token) and can be turned off.
+        assert!(s.probe_fallback);
         assert!(s.last_usage.is_none());
     }
 
