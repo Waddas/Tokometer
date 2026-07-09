@@ -72,19 +72,22 @@ with your session usage, and the tooltip shows both live percentages.
   `~/.claude/.credentials.json` (with `%LOCALAPPDATA%`/`%APPDATA%` fallbacks).
   Nothing is stored or sent anywhere else.
 - **Usage** — Anthropic's OAuth usage endpoint is polled once a minute for the
-  utilization and reset time of both windows, with an optional probe fallback
-  (below) when that endpoint fails.
+  utilization and reset time of both windows, with a probe fallback (below)
+  when that endpoint fails. If the endpoint rate-limits the account (HTTP
+  429), retries back off exponentially (2 → 4 → 8 → 15 min, with jitter)
+  instead of hammering it; a manual refresh retries immediately.
 - **History** — the API only reports *current* utilization, so the app
   accumulates its own time series locally (`history.json` next to its config)
   to draw the graph: full resolution for recent hours, thinned to one sample
   per five minutes beyond that, capped at 15 days — enough for each view to
   show a ghost of its previous window. Each sample records its window's reset
   time, so windows are compared by identity rather than wall-clock guesswork.
-- **Fallback probe** (optional, off by default) — if the free usage endpoint
-  fails, Tokometer can cross-check by sending a minimal 1-token `/v1/messages`
-  request and reading the rate-limit headers. It spends a sliver of the quota
-  it measures, so it's opt-in (Settings → Fallback usage probe) and never
-  fires more than once every 5 minutes.
+- **Fallback probe** (on by default) — if the free usage endpoint fails,
+  Tokometer cross-checks by sending a minimal 1-token `/v1/messages` request
+  and reading the rate-limit headers. It only runs while the usage endpoint
+  is failing, never fires more than once every 5 minutes, and spends a
+  sliver (one Haiku token) of the quota it measures — it can be turned off
+  under Settings → Fallback usage probe.
 
 ## Install
 
