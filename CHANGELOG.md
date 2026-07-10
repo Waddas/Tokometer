@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.2](https://github.com/Waddas/Tokometer/compare/v1.2.1...v1.2.2) (2026-07-09)
+
+
+### Bug Fixes
+
+* exponential backoff for HTTP 429 and enable fallback probe ([#10](https://github.com/Waddas/Tokometer/issues/10)) ([f24c80e](https://github.com/Waddas/Tokometer/commit/f24c80e5e9c477145c1b150251b3b789ebf5aa35))
+* skip self-update checks in dev builds ([#12](https://github.com/Waddas/Tokometer/issues/12)) ([0f86370](https://github.com/Waddas/Tokometer/commit/0f86370ce05065c680a6794bfbbd23d696fa2012))
+
 ## [1.2.1](https://github.com/Waddas/Tokometer/compare/v1.2.0...v1.2.1) (2026-07-03)
 
 
