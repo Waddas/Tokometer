@@ -55,6 +55,40 @@ tasks:
     cmds:
       - npm run build
 
+  # Graduation must never go through the GitHub UI: the repo is squash-only
+  # and main requires linear history, so a UI merge would collapse the whole
+  # beta cycle into one commit and release-please would lose the per-PR
+  # changelog entries and version bumps. Pushing the merge commit relies on
+  # the main ruleset's admin bypass — for anyone else the push is rejected.
+  graduate:
+    desc: Graduate the beta channel — merge beta into main with a merge commit (repo admin only)
+    preconditions:
+      - sh: git diff --quiet && git diff --cached --quiet
+        msg: Working tree must be clean.
+    cmds:
+      - git fetch origin
+      - git checkout main
+      - git merge --ff-only origin/main
+      - 'git merge --no-ff origin/beta -m "chore: graduate beta to main"'
+      - git push origin main
+      - cmd: echo "Graduated. Merge the release PR release-please opens, then run task sync-beta."
+        silent: true
+
+  sync-beta:
+    desc: After a stable release — merge main back into beta and reset the beta manifest
+    preconditions:
+      - sh: git diff --quiet && git diff --cached --quiet
+        msg: Working tree must be clean.
+    cmds:
+      - git fetch origin
+      - git checkout beta
+      - git merge --ff-only origin/beta
+      - 'git merge --no-ff origin/main -m "chore: sync beta with main after stable release"'
+      - node -e "const fs=require('fs'); const v=JSON.parse(fs.readFileSync('.release-please-manifest.json','utf8'))['.']; const p='.release-please-manifest-beta.json'; const m=JSON.parse(fs.readFileSync(p,'utf8')); m['.']=v; fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n'); console.log('beta manifest set to '+v)"
+      - git add .release-please-manifest-beta.json
+      - 'git diff --cached --quiet || git commit -m "chore: reset beta manifest to current stable"'
+      - git push origin beta
+
   test:
     desc: Run the whole test suite (frontend + Rust)
     deps:

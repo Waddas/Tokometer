@@ -62,6 +62,26 @@ bumps the patch version, and a `!` (e.g. `feat!:`) marks a breaking change.
 Individual commits on your branch don't need to follow the convention — only
 the PR title is checked.
 
+### Release channels
+
+`main` is the stable channel. The long-lived `beta` branch is the pre-release
+channel: PRs merged there ship as `X.Y.Z-beta.N` GitHub prereleases (with
+their own `CHANGELOG-beta.md`) for users who opt in to beta updates. Target
+`beta` when a change should bake in a beta before going stable.
+
+Graduation is scripted — never open a beta→main PR. The repo is squash-only,
+so the GitHub UI would collapse the whole beta cycle into a single commit and
+release-please on `main` would lose the per-PR changelog entries and version
+bumps. Instead a repo admin runs:
+
+1. `task graduate` — merges `beta` into `main` with a merge commit (the push
+   relies on the main ruleset's admin bypass) and release-please opens the
+   stable release PR.
+2. After that release PR is merged and the release publishes:
+   `task sync-beta` — merges `main` back into `beta` and resets
+   `.release-please-manifest-beta.json` to the new stable version so the next
+   beta bumps from it.
+
 ## Code of Conduct
 
 By participating, you agree to abide by our
