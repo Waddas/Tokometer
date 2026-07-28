@@ -10,6 +10,7 @@ import { UsageGraph } from "./graph";
 const appWindow = getCurrentWindow();
 
 const root = document.getElementById("root")!;
+const content = document.getElementById("content")!;
 const mascotCanvas = document.getElementById("mascot") as HTMLCanvasElement;
 const btnPin = document.getElementById("btn-pin")!;
 const btnRefresh = document.getElementById("btn-refresh")!;
@@ -17,7 +18,6 @@ const btnSettings = document.getElementById("btn-settings")!;
 const btnHide = document.getElementById("btn-hide")!;
 const statusEl = document.getElementById("status")!;
 
-const usage = new UsageRenderer(document.body);
 const splash = new Splash(mascotCanvas);
 const rate = new RateTracker();
 const history = new UsageHistory();
@@ -46,6 +46,14 @@ function updateScale() {
   document.documentElement.style.setProperty("--chrome", String(Math.min(1, scale)));
 }
 window.addEventListener("resize", updateScale);
+
+/** How many tile tracks the content grid repeats: the tiles share the
+ *  layout's fixed band, so the window size never depends on the count. */
+function setTiles(count: number) {
+  content.style.setProperty("--tiles", String(count));
+}
+
+const usage = new UsageRenderer(content, setTiles);
 
 function applyLayout(l: api.Layout) {
   layout = l;
@@ -210,8 +218,9 @@ function applySnapshot(s: api.UsageSnapshot) {
   renderStatus(s);
   if (!mockActive) history.sample(s);
   graph.update(shown);
-  if (s.status === "ok" && s.fiveHour) {
-    rate.sample(s.fiveHour.utilization);
+  const session = s.windows.find((w) => w.id === api.SESSION_ID);
+  if (s.status === "ok" && session) {
+    rate.sample(session.utilization);
     splash.setGroup(rate.group());
   }
 }
@@ -244,13 +253,15 @@ void api.onUsage((s) => {
 });
 
 /* ---- dev: D toggles dev mode, shown as a badge in the top strip. While on,
- * M cycles the data source (live → mock → error) and A cycles the mascot
- * animation; leaving dev mode resets both. ---- */
+ * M cycles the data source (live → mock → mock-stale → error) and A cycles
+ * the mascot animation; leaving dev mode resets both. ---- */
 if (import.meta.env.DEV) {
   let devMode = false;
   let pinnedAnim = -1; // -1 = automatic rate-grouped rotation
   let barHidden = false; // tray "Hide dev bar" — keeps dev mode on for captures
-  const SOURCES = ["live", "mock", "error"] as const;
+  // "mock-stale" is the same mock served by the fallback probe: its scoped
+  // window is a carried-over value, so that tile renders dimmed.
+  const SOURCES = ["live", "mock", "mock-stale", "error"] as const;
   let devSource: (typeof SOURCES)[number] = "live";
 
   const badge = document.createElement("div");
@@ -274,9 +285,7 @@ if (import.meta.env.DEV) {
     status: "error",
     source: null,
     fetchedAt: Date.now(),
-    fiveHour: null,
-    sevenDay: null,
-    fiveHourStatus: null,
+    windows: [],
     error: "mocked failure (dev): usage API unreachable",
   });
 
@@ -285,8 +294,8 @@ if (import.meta.env.DEV) {
       if (devSource === src) return;
       devSource = src;
       mockActive = src !== "live";
-      if (src === "mock") {
-        const mock = new MockHistory();
+      if (src === "mock" || src === "mock-stale") {
+        const mock = new MockHistory(Date.now(), src === "mock" ? "fresh" : "stale-scoped");
         graph.setHistory(mock);
         applySnapshot(mock.snapshot);
         void api.setTrayOverride(mock.snapshot);
@@ -342,6 +351,7 @@ void api.onStateChange((s) => {
   splash.setMascot(s.mascot);
   markMascot(s.mascot);
   graph.setWorkDays(s.workDays);
+  usage.setHidden(s.hiddenLimits);
 });
 
 void api.getState().then((st) => {
@@ -351,6 +361,7 @@ void api.getState().then((st) => {
   splash.setMascot(st.mascot);
   markMascot(st.mascot);
   graph.setWorkDays(st.workDays);
+  usage.setHidden(st.hiddenLimits);
   if (st.lastUsage) {
     lastReal = st.lastUsage;
     if (!mockActive) applySnapshot(st.lastUsage);

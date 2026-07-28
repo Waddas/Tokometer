@@ -3,16 +3,17 @@
 // at the limit, and a faint ghost of the previous window. Right-clicking it
 // switches between the 5-hour and 7-day windows; hovering reads off the time
 // and percentage under the cursor.
-import type { UsageSnapshot } from "./api";
+import { SESSION_ID, WEEKLY_ALL_ID, type UsageSnapshot } from "./api";
 import type { UsageHistory } from "./history";
 import { AMBER_AT_PCT, RED_AT_PCT } from "./thresholds";
 import { trendSlope, projectUsage, type Pt } from "./trend";
 
 type Mode = "session" | "weekly";
 
+// `key` is the window id the snapshot and the history log are keyed by.
 const MODE = {
-  session: { key: "five", windowMs: 5 * 3_600_000, trendMs: 30 * 60_000, label: "5h" },
-  weekly: { key: "week", windowMs: 7 * 86_400_000, trendMs: 6 * 3_600_000, label: "7d" },
+  session: { key: SESSION_ID, windowMs: 5 * 3_600_000, trendMs: 30 * 60_000, label: "5h" },
+  weekly: { key: WEEKLY_ALL_ID, windowMs: 7 * 86_400_000, trendMs: 6 * 3_600_000, label: "7d" },
 } as const;
 
 const MODE_KEY = "graph-mode";
@@ -130,7 +131,7 @@ export class UsageGraph {
     const pad = PAD * c;
     const cfg = MODE[this.mode];
     const now = Date.now();
-    const win = this.mode === "session" ? this.snapshot?.fiveHour : this.snapshot?.sevenDay;
+    const win = this.snapshot?.windows.find((w) => w.id === cfg.key) ?? null;
     // No reset time means no window is running (the last one lapsed and
     // nothing has started a new one); the axes then track the current moment.
     const resetMs = win?.resetAt ? win.resetAt * 1000 : null;

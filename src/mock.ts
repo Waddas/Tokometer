@@ -1,7 +1,7 @@
 // Dev-only mock data: press M in dev mode to preview the widget with a
 // representative usage shape instead of whatever the live account shows.
 // Implements the graph's GraphSource interface; never touches localStorage.
-import type { UsageSnapshot } from "./api";
+import { SESSION_ID, WEEKLY_ALL_ID, type UsageSnapshot } from "./api";
 import type { WindowSlice } from "./history";
 import type { Pt } from "./trend";
 
@@ -32,6 +32,11 @@ function curve(start: number, end: number, step: number, target: number): Pt[] {
   return raw.map((p, i) => ({ ms: start + i * step, pct: Math.min(100, p * scale) }));
 }
 
+/** Which poll to preview: one the oauth endpoint served in full, or a
+ *  fallback-probe one whose scoped window is a carried-over last known value
+ *  (`carry_missing_windows` in usage.rs). */
+export type MockVariant = "fresh" | "stale-scoped";
+
 export class MockHistory {
   private five: Pt[];
   private week: Pt[];
@@ -40,7 +45,7 @@ export class MockHistory {
   private prevWeekReset: number;
   readonly snapshot: UsageSnapshot;
 
-  constructor(now = Date.now()) {
+  constructor(now = Date.now(), variant: MockVariant = "fresh") {
     // 5h window: 3.5h in, heading for a tight finish; busy previous window
     // that lapsed 24 minutes before this one began.
     const fiveEnd = now + 1.5 * HOUR;
@@ -61,36 +66,54 @@ export class MockHistory {
       ...curve(weekStart, now, 15 * MIN, 30),
     ];
 
+    const carried = variant === "stale-scoped";
     this.snapshot = {
       status: "ok",
-      source: "oauth",
+      // Only the fallback probe ever carries a window over.
+      source: carried ? "messages" : "oauth",
       fetchedAt: now,
-      fiveHour: {
-        utilization: this.five[this.five.length - 1].pct,
-        resetAt: Math.round(fiveEnd / 1000),
-      },
-      sevenDay: {
-        utilization: this.week[this.week.length - 1].pct,
-        resetAt: Math.round(weekEnd / 1000),
-      },
-      fiveHourStatus: null,
+      windows: [
+        {
+          id: SESSION_ID,
+          label: "5h",
+          utilization: this.five[this.five.length - 1].pct,
+          resetAt: Math.round(fiveEnd / 1000),
+        },
+        {
+          id: WEEKLY_ALL_ID,
+          label: "7d",
+          utilization: this.week[this.week.length - 1].pct,
+          resetAt: Math.round(weekEnd / 1000),
+        },
+        // A scoped limit, so the third tile is previewable.
+        {
+          id: "weekly_scoped:fable",
+          label: "Fable",
+          utilization: 21,
+          resetAt: Math.round(weekEnd / 1000),
+          ...(carried ? { stale: true } : {}),
+        },
+      ],
       error: null,
     };
   }
 
-  points(key: "five" | "week", startMs: number): Pt[] {
-    return (key === "five" ? this.five : this.week).filter((p) => p.ms >= startMs);
+  /** The mock only graphs the two windows the graph has modes for. */
+  private series(id: string): Pt[] | null {
+    if (id === SESSION_ID) return this.five;
+    if (id === WEEKLY_ALL_ID) return this.week;
+    return null;
   }
 
-  previousWindow(
-    key: "five" | "week",
-    _currentResetMs: number | null,
-    windowMs: number,
-  ): WindowSlice | null {
-    const resetMs = key === "five" ? this.prevFiveReset : this.prevWeekReset;
-    const pts = (key === "five" ? this.five : this.week).filter(
-      (p) => p.ms <= resetMs && p.ms >= resetMs - windowMs,
-    );
+  points(id: string, startMs: number): Pt[] {
+    return (this.series(id) ?? []).filter((p) => p.ms >= startMs);
+  }
+
+  previousWindow(id: string, _currentResetMs: number | null, windowMs: number): WindowSlice | null {
+    const series = this.series(id);
+    if (!series) return null;
+    const resetMs = id === SESSION_ID ? this.prevFiveReset : this.prevWeekReset;
+    const pts = series.filter((p) => p.ms <= resetMs && p.ms >= resetMs - windowMs);
     return pts.length >= 2 ? { pts, resetMs } : null;
   }
 }

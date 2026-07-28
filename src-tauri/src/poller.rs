@@ -69,7 +69,7 @@ pub fn spawn(app: AppHandle) {
                     next_oauth_ms = 0;
                 }
             }
-            let Some(snapshot) = outcome.snapshot else {
+            let Some(mut snapshot) = outcome.snapshot else {
                 // Nothing was due this tick (usage endpoint backing off,
                 // probe not due) — sleep without touching the shown state.
                 if wait_or_refresh(&notify).await {
@@ -95,7 +95,13 @@ pub fn spawn(app: AppHandle) {
             }
             {
                 let state = app.state::<crate::state::AppState>();
-                state.0.lock().unwrap().last_usage = Some(snapshot.clone());
+                let mut s = state.0.lock().unwrap();
+                // The probe can only see two windows; keep the rest at their
+                // last known values rather than dropping their tiles.
+                if let Some(previous) = &s.last_usage {
+                    usage::carry_missing_windows(&mut snapshot, previous);
+                }
+                s.last_usage = Some(snapshot.clone());
             }
             crate::state::save(&app);
             let recorded = {
