@@ -62,6 +62,10 @@ export interface Preferences {
   workDays: boolean[];
   /** Whether a failing usage endpoint may fall back to the 1-token probe. */
   probeFallback: boolean;
+  /** Whether to open a fresh 5-hour window as soon as the previous one resets. */
+  sessionKeeper: boolean;
+  /** When the keeper last ran (epoch ms), or null if it never has. */
+  lastKeepaliveAt: number | null;
 }
 
 export interface AppStateSnapshot extends Preferences {
@@ -82,6 +86,8 @@ export const setTrayStyle = (style: TrayStyle) => invoke<void>("set_tray_style",
 export const setWorkDays = (days: boolean[]) => invoke<void>("set_work_days", { days });
 export const setProbeFallback = (enabled: boolean) =>
   invoke<void>("set_probe_fallback", { enabled });
+export const setSessionKeeper = (enabled: boolean) =>
+  invoke<void>("set_session_keeper", { enabled });
 /** Size the widget for a logical width, height locked to the layout's aspect
  * ratio; `commit` persists the resulting free-resize scale. */
 export const resizeWidget = (width: number, commit: boolean) =>

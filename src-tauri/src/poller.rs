@@ -3,6 +3,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Notify;
 
+use crate::keeper;
 use crate::usage::{self, UsageSnapshot};
 
 /// Wakes the poll loop early for an immediate refresh (tray "Refresh now" / UI button).
@@ -41,6 +42,15 @@ pub fn spawn(app: AppHandle) {
             .build()
             .expect("failed to build http client");
         let mut last_probe_ms: i64 = 0;
+        // Seeded from disk so the keeper's cooldown survives a restart —
+        // otherwise relaunching the app could open a window every time.
+        let mut last_keeper_ms: i64 = app
+            .state::<crate::state::AppState>()
+            .0
+            .lock()
+            .unwrap()
+            .last_keepalive_at
+            .unwrap_or(0);
         let mut consecutive_failures: u32 = 0;
         let mut rate_limited_polls: u32 = 0;
         // Next moment the usage endpoint may be tried; pushed into the future
@@ -93,27 +103,89 @@ pub fn spawn(app: AppHandle) {
                     continue;
                 }
             }
-            {
-                let state = app.state::<crate::state::AppState>();
-                state.0.lock().unwrap().last_usage = Some(snapshot.clone());
+            publish(&app, &snapshot);
+
+            // The window this snapshot describes may have already reset with
+            // nothing to replace it; opening the next one now keeps them
+            // rolling back-to-back.
+            if keep_session_alive(&app, &client, &snapshot, &mut last_keeper_ms).await {
+                // Loop straight back round instead of sleeping, so the new
+                // window's reset time reaches the widget now rather than up to
+                // a minute later. Reading it from the send's own rate-limit
+                // headers would be quicker still, but those carry no 7-day
+                // figure when the endpoint omits that header — a fresh poll
+                // can't silently zero the weekly tile. The keeper's own
+                // cooldown is what stops this from becoming a tight loop.
+                continue;
             }
-            crate::state::save(&app);
-            let recorded = {
-                let log = app.state::<crate::history::HistoryLog>();
-                let mut samples = log.0.lock().unwrap();
-                crate::history::record(&mut samples, &snapshot, usage::now_ms())
-            };
-            if recorded {
-                crate::history::save(&app);
-            }
-            let _ = app.emit("usage://update", &snapshot);
-            crate::tray::update(&app, &snapshot);
 
             if wait_or_refresh(&notify).await {
                 next_oauth_ms = 0;
             }
         }
     });
+}
+
+/// Store, persist, record and broadcast a snapshot — every path that produces
+/// one ends here, so the widget, the tray and the history log never disagree.
+fn publish(app: &AppHandle, snapshot: &UsageSnapshot) {
+    {
+        let state = app.state::<crate::state::AppState>();
+        state.0.lock().unwrap().last_usage = Some(snapshot.clone());
+    }
+    crate::state::save(app);
+    let recorded = {
+        let log = app.state::<crate::history::HistoryLog>();
+        let mut samples = log.0.lock().unwrap();
+        crate::history::record(&mut samples, snapshot, usage::now_ms())
+    };
+    if recorded {
+        crate::history::save(app);
+    }
+    let _ = app.emit("usage://update", snapshot);
+    crate::tray::update(app, snapshot);
+}
+
+/// Session keeper: when the 5-hour window has reset and nothing has started
+/// the next one, send a minimal message to open it (see keeper.rs for why and
+/// for the guards). Returns whether a message was sent.
+async fn keep_session_alive(
+    app: &AppHandle,
+    client: &reqwest::Client,
+    snapshot: &UsageSnapshot,
+    last_keeper_ms: &mut i64,
+) -> bool {
+    let enabled = app
+        .state::<crate::state::AppState>()
+        .0
+        .lock()
+        .unwrap()
+        .session_keeper;
+    if !enabled {
+        return false;
+    }
+    let now = usage::now_ms();
+    if !keeper::should_start_session(snapshot, *last_keeper_ms, now) {
+        return false;
+    }
+    let Ok(creds) = crate::credentials::read() else {
+        return false;
+    };
+    // Recorded before the request, not after: a failed send has to start the
+    // cooldown too, or a persistently failing one retries every poll.
+    *last_keeper_ms = now;
+    {
+        let state = app.state::<crate::state::AppState>();
+        state.0.lock().unwrap().last_keepalive_at = Some(now);
+    }
+    crate::state::save(app);
+    crate::tray::emit_state(app);
+    // The outcome is deliberately not surfaced: the figures on screen came from
+    // the poll above and are still correct, so turning a keeper failure into an
+    // error state would be a regression in what the user can see. The re-poll
+    // that follows shows whether a window actually opened.
+    let _ = fetch_messages(client, &creds.token).await;
+    true
 }
 
 /// Sleep one poll interval; returns true when woken early by a manual

@@ -142,6 +142,8 @@ pub fn emit_state(app: &AppHandle) {
             "trayStyle": s.tray_style,
             "workDays": s.work_days,
             "probeFallback": s.probe_fallback,
+            "sessionKeeper": s.session_keeper,
+            "lastKeepaliveAt": s.last_keepalive_at,
             "visible": visible,
         })
     };

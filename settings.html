@@ -48,6 +48,12 @@
           1-token API request. This spends a tiny amount of the quota it
           measures, at most once every 5 minutes.
         </p>
+        <label class="check"><input type="checkbox" id="keeper" /><span>Keep a session open</span></label>
+        <p class="hint indent">
+          Opens the next 5-hour window as soon as the last one resets, with the
+          same 1-token request, so idle gaps between windows aren't wasted.
+        </p>
+        <p class="hint indent" id="keeper-status"></p>
       </section>
 
       <p class="version" id="version"></p>

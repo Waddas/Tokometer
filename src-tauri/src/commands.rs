@@ -18,6 +18,8 @@ pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
         "trayStyle": s.tray_style,
         "workDays": s.work_days,
         "probeFallback": s.probe_fallback,
+        "sessionKeeper": s.session_keeper,
+        "lastKeepaliveAt": s.last_keepalive_at,
         "lastUsage": s.last_usage,
     })
 }
@@ -75,6 +77,18 @@ pub fn set_probe_fallback(app: AppHandle, enabled: bool) {
     app.state::<AppState>().0.lock().unwrap().probe_fallback = enabled;
     crate::state::save(&app);
     crate::tray::emit_state(&app);
+}
+
+#[tauri::command]
+pub fn set_session_keeper(app: AppHandle, enabled: bool) {
+    app.state::<AppState>().0.lock().unwrap().session_keeper = enabled;
+    crate::state::save(&app);
+    crate::tray::emit_state(&app);
+    // Turning it on shouldn't mean waiting up to a minute for the poll that
+    // notices an already-expired window.
+    if enabled {
+        app.state::<RefreshSignal>().0.notify_one();
+    }
 }
 
 #[tauri::command]

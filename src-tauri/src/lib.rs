@@ -1,6 +1,7 @@
 mod commands;
 mod credentials;
 mod history;
+mod keeper;
 mod poller;
 mod state;
 mod tray;
@@ -166,6 +167,7 @@ pub fn run() {
             commands::set_tray_style,
             commands::set_work_days,
             commands::set_probe_fallback,
+            commands::set_session_keeper,
             commands::resize_widget,
             commands::toggle_visibility,
             commands::open_settings,

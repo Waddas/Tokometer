@@ -6,6 +6,7 @@ import "./settings.css";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./api";
+import { keeperStatus as keeperStatusText } from "./keeper";
 
 const LAYOUTS: [api.Layout, string][] = [
   ["mascot-left", "Display left"],
@@ -69,6 +70,8 @@ const sizeHint = document.getElementById("size-hint")!;
 const pinBox = document.getElementById("pin") as HTMLInputElement;
 const autostartBox = document.getElementById("autostart") as HTMLInputElement;
 const probeBox = document.getElementById("probe") as HTMLInputElement;
+const keeperBox = document.getElementById("keeper") as HTMLInputElement;
+const keeperStatus = document.getElementById("keeper-status")!;
 
 pinBox.addEventListener("change", () => void api.setPin(pinBox.checked));
 autostartBox.addEventListener(
@@ -76,6 +79,7 @@ autostartBox.addEventListener(
   () => void api.setAutostart(autostartBox.checked).then((on) => (autostartBox.checked = on)),
 );
 probeBox.addEventListener("change", () => void api.setProbeFallback(probeBox.checked));
+keeperBox.addEventListener("change", () => void api.setSessionKeeper(keeperBox.checked));
 
 /* ---- work days: independent toggles, sent as the whole Sun..Sat array ---- */
 let workDays = [true, true, true, true, true, true, true];
@@ -98,6 +102,15 @@ const dayBoxes = new Map<number, { label: HTMLLabelElement; input: HTMLInputElem
   }
 }
 
+/* ---- keeper status: an elapsed time, so it ages between state changes ---- */
+let keeperState: Pick<api.Preferences, "sessionKeeper" | "lastKeepaliveAt"> | null = null;
+function renderKeeperStatus() {
+  keeperStatus.textContent = keeperState
+    ? keeperStatusText(keeperState.sessionKeeper, keeperState.lastKeepaliveAt)
+    : "";
+}
+setInterval(renderKeeperStatus, 30_000);
+
 function render(prefs: api.Preferences) {
   markLayout(prefs.layout);
   // A free-resized widget matches no preset; say what it is instead.
@@ -110,6 +123,9 @@ function render(prefs: api.Preferences) {
   markTray(prefs.trayStyle);
   pinBox.checked = prefs.pin;
   probeBox.checked = prefs.probeFallback;
+  keeperBox.checked = prefs.sessionKeeper;
+  keeperState = prefs;
+  renderKeeperStatus();
   workDays = [...prefs.workDays];
   for (const [day, { label, input }] of dayBoxes) {
     input.checked = prefs.workDays[day];

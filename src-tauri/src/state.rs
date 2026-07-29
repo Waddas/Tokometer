@@ -201,6 +201,14 @@ pub struct PersistedState {
     /// Whether a failing usage endpoint may fall back to a minimal (1-token,
     /// quota-consuming) `/v1/messages` probe. On by default.
     pub probe_fallback: bool,
+    /// Whether to open a fresh 5-hour window as soon as the previous one
+    /// resets, by sending the same minimal 1-token message (see keeper.rs).
+    /// Off by default — it makes API requests nobody asked for.
+    pub session_keeper: bool,
+    /// When the keeper last ran (unix epoch ms), stamped before the request so
+    /// a failed send still starts the cooldown. Persisted so that cooldown
+    /// survives a restart, and so the settings window can show it.
+    pub last_keepalive_at: Option<i64>,
     pub last_usage: Option<UsageSnapshot>,
 }
 
@@ -227,6 +235,8 @@ impl Default for PersistedState {
             tray_style: TrayStyle::default(),
             work_days: all_work_days(),
             probe_fallback: true,
+            session_keeper: false,
+            last_keepalive_at: None,
             last_usage: None,
         }
     }
@@ -444,6 +454,10 @@ mod tests {
         // On by default so the app keeps working when the usage endpoint
         // rate-limits; the probe is cheap (1 token) and can be turned off.
         assert!(s.probe_fallback);
+        // Off by default: unlike the probe it sends requests the user never
+        // triggered, so it has to be opted into.
+        assert!(!s.session_keeper);
+        assert!(s.last_keepalive_at.is_none());
         assert!(s.last_usage.is_none());
     }
 
@@ -459,6 +473,8 @@ mod tests {
             tray_style: TrayStyle::Text,
             work_days: [true, false, true, true, true, true, false],
             probe_fallback: true,
+            session_keeper: true,
+            last_keepalive_at: Some(1_780_596_000_000),
             last_usage: None,
         };
         let json = serde_json::to_string(&original).unwrap();
@@ -471,6 +487,8 @@ mod tests {
         assert_eq!(back.tray_style, original.tray_style);
         assert_eq!(back.work_days, original.work_days);
         assert_eq!(back.probe_fallback, original.probe_fallback);
+        assert_eq!(back.session_keeper, original.session_keeper);
+        assert_eq!(back.last_keepalive_at, original.last_keepalive_at);
         assert_eq!(back.window.unwrap().x, 12.0);
     }
 

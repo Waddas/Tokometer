@@ -37,6 +37,9 @@
   you don't want it.
 - **Six layouts** — mascot/graph beside, above, or below the tiles, or tiles
   only — all in a proper settings window.
+- **Never idle through a window** — opt in to the **session keeper** and the
+  next 5-hour window opens the moment the last one resets, so time spent away
+  from the keyboard doesn't quietly cost you windows.
 
 ## Showcase
 
@@ -59,7 +62,7 @@
 | **Right-click** the graph | Switch between the 5-hour and 7-day windows |
 | **Right-click** the mascot | Pick a mascot (Clawd / Axolotl / Cat) |
 | **Hover** | Reveal pin-on-top, refresh, settings, and hide buttons |
-| **Settings window** (⚙ or tray) | Layout, size, mascot, tray icon, work days, pin, start at login |
+| **Settings window** (⚙ or tray) | Layout, size, mascot, tray icon, work days, pin, start at login, session keeper |
 | **Tray menu** | Show/hide, settings, refresh, check for updates, quit |
 
 The tray icon doubles as a status light — its bubble turns green/amber/red
@@ -89,6 +92,16 @@ with your session usage, and the tooltip shows both live percentages.
   is failing, never fires more than once every 5 minutes, and spends a
   sliver (one Haiku token) of the quota it measures — it can be turned off
   under Settings → Fallback usage probe.
+- **Session keeper** (off by default) — a 5-hour window only *starts* when a
+  request is made, so an idle account has no window running: after one resets,
+  the clock stops until you next use Claude, and the gap is a slice of a window
+  the plan would have granted. Enabled, Tokometer sends the same minimal
+  1-token request about a minute after a window resets, opening the next one
+  immediately so the windows roll back-to-back. In practice that's ~5 requests
+  a day. It stands down while a window is still running, while the 7-day
+  figure is at 99%+ (the weekly limit is what binds then), and whenever usage
+  can't be read at all; a 10-minute floor between sends caps it if a window
+  never appears to open. Turn it on under Settings → Keep a session open.
 
 ## Install
 
