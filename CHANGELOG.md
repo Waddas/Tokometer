@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/Waddas/Tokometer/compare/v1.2.2...v1.3.0) (2026-07-29)
+
+
+### Features
+
+* auto-detect usage limits and render a tile per limit ([5666ea7](https://github.com/Waddas/Tokometer/commit/5666ea72ed905ff66f72670e8a7e84c40fa7b730))
+
 ## [1.2.2](https://github.com/Waddas/Tokometer/compare/v1.2.1...v1.2.2) (2026-07-09)
 
 
