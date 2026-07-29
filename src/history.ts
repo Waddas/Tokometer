@@ -31,35 +31,32 @@ export class UsageHistory {
     const ms = s.fetchedAt || now;
     const last = this.samples[this.samples.length - 1];
     if (last && ms - last.ms < MIN_GAP_MS) return;
-    this.samples.push({
-      ms,
-      five: s.fiveHour?.utilization ?? null,
-      week: s.sevenDay?.utilization ?? null,
-      fiveReset: s.fiveHour?.resetAt != null ? s.fiveHour.resetAt * 1000 : null,
-      weekReset: s.sevenDay?.resetAt != null ? s.sevenDay.resetAt * 1000 : null,
-    });
+    const w: HistorySample["w"] = {};
+    for (const win of s.windows) {
+      w[win.id] = { pct: win.utilization, reset: win.resetAt != null ? win.resetAt * 1000 : null };
+    }
+    this.samples.push({ ms, w });
   }
 
   /**
-   * Points for one usage window since `startMs`, oldest first. Samples
+   * Points for one usage window (by id) since `startMs`, oldest first. Samples
    * stamped with a different reset time belong to another window and are
    * dropped: after a window lapses (`currentResetMs` null, so nothing is
    * running) every stamped sample is some finished window's, and only the
    * unstamped zero-usage polls of the lapse itself remain. Samples from
    * older builds carry no reset time and are kept on the time filter alone.
    */
-  points(key: "five" | "week", startMs: number, currentResetMs: number | null): Pt[] {
-    const resetKey = key === "five" ? "fiveReset" : "weekReset";
+  points(id: string, startMs: number, currentResetMs: number | null): Pt[] {
     const pts: Pt[] = [];
     for (const s of this.samples) {
-      const pct = s[key];
-      if (s.ms < startMs || pct === null) continue;
-      const r = s[resetKey];
+      const win = s.w[id];
+      if (s.ms < startMs || !win) continue;
+      const r = win.reset;
       if (r != null) {
         if (currentResetMs === null) continue;
         if (Math.abs(r - currentResetMs) > RESET_TOLERANCE_MS) continue;
       }
-      pts.push({ ms: s.ms, pct });
+      pts.push({ ms: s.ms, pct: win.pct });
     }
     return pts;
   }
@@ -73,16 +70,11 @@ export class UsageHistory {
    * Returns null when history holds no such window with at least two points
    * (samples from older builds carry no reset time and are never segmented).
    */
-  previousWindow(
-    key: "five" | "week",
-    currentResetMs: number | null,
-    windowMs: number,
-  ): WindowSlice | null {
-    const resetKey = key === "five" ? "fiveReset" : "weekReset";
+  previousWindow(id: string, currentResetMs: number | null, windowMs: number): WindowSlice | null {
     let resetMs: number | null = null;
     for (let i = this.samples.length - 1; i >= 0; i--) {
-      const r = this.samples[i][resetKey];
-      if (r == null || this.samples[i][key] === null) continue;
+      const r = this.samples[i].w[id]?.reset;
+      if (r == null) continue;
       if (currentResetMs === null || r < currentResetMs - RESET_TOLERANCE_MS) {
         resetMs = r;
         break;
@@ -91,13 +83,12 @@ export class UsageHistory {
     if (resetMs === null) return null;
     const pts: Pt[] = [];
     for (const s of this.samples) {
-      const r = s[resetKey];
-      const pct = s[key];
-      if (r == null || pct === null) continue;
-      if (Math.abs(r - resetMs) > RESET_TOLERANCE_MS) continue;
+      const win = s.w[id];
+      if (!win || win.reset == null) continue;
+      if (Math.abs(win.reset - resetMs) > RESET_TOLERANCE_MS) continue;
       // The span check inherits the anchor's jitter, so give it the same slack.
       if (s.ms > resetMs || s.ms < resetMs - windowMs - RESET_TOLERANCE_MS) continue;
-      pts.push({ ms: s.ms, pct });
+      pts.push({ ms: s.ms, pct: win.pct });
     }
     return pts.length >= 2 ? { pts, resetMs } : null;
   }

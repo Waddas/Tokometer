@@ -53,7 +53,9 @@ impl Layout {
         Self::ALL.into_iter().find(|l| l.id() == id)
     }
 
-    /// The layout's design-space dimensions (geometry in styles.css).
+    /// The layout's design-space dimensions (geometry in styles.css). Fixed:
+    /// however many limits the API reports, the tiles share the layout's tile
+    /// band, so the window never resizes itself around the data.
     fn design_size(self) -> (f64, f64) {
         match self {
             Layout::MascotLeft | Layout::MascotRight => (282.0, 168.0),
@@ -201,6 +203,10 @@ pub struct PersistedState {
     /// Whether a failing usage endpoint may fall back to a minimal (1-token,
     /// quota-consuming) `/v1/messages` probe. On by default.
     pub probe_fallback: bool,
+    /// Ids of limit windows the user hid; ids the API no longer reports are
+    /// kept, so a limit that comes back stays hidden.
+    #[serde(default)]
+    pub hidden_limits: Vec<String>,
     pub last_usage: Option<UsageSnapshot>,
 }
 
@@ -227,6 +233,7 @@ impl Default for PersistedState {
             tray_style: TrayStyle::default(),
             work_days: all_work_days(),
             probe_fallback: true,
+            hidden_limits: Vec::new(),
             last_usage: None,
         }
     }
@@ -319,6 +326,19 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn design_sizes_do_not_depend_on_the_data() {
+        // The tiles share their band, so a new or hidden limit must never
+        // resize the widget; these constants are the whole geometry contract
+        // with styles.css (and `DESIGN_WIDTH` in main.ts).
+        assert_eq!(Layout::MascotLeft.design_size(), (282.0, 168.0));
+        assert_eq!(Layout::MascotRight.design_size(), (282.0, 168.0));
+        assert_eq!(Layout::MascotTop.design_size(), (238.0, 243.0));
+        assert_eq!(Layout::MascotBottom.design_size(), (238.0, 243.0));
+        assert_eq!(Layout::TilesRow.design_size(), (238.0, 93.0));
+        assert_eq!(Layout::TilesColumn.design_size(), (128.0, 168.0));
     }
 
     #[test]
@@ -444,6 +464,8 @@ mod tests {
         // On by default so the app keeps working when the usage endpoint
         // rate-limits; the probe is cheap (1 token) and can be turned off.
         assert!(s.probe_fallback);
+        // New limits are visible until the user hides them.
+        assert!(s.hidden_limits.is_empty());
         assert!(s.last_usage.is_none());
     }
 
@@ -459,10 +481,12 @@ mod tests {
             tray_style: TrayStyle::Text,
             work_days: [true, false, true, true, true, true, false],
             probe_fallback: true,
+            hidden_limits: vec!["weekly_scoped:fable".into()],
             last_usage: None,
         };
         let json = serde_json::to_string(&original).unwrap();
         let back: PersistedState = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.hidden_limits, original.hidden_limits);
         assert_eq!(back.pin, original.pin);
         assert_eq!(back.layout, original.layout);
         assert_eq!(back.size, original.size);
@@ -482,5 +506,6 @@ mod tests {
         };
         let v = serde_json::to_value(&s).unwrap();
         assert!(v.get("lastUsage").is_some());
+        assert!(v.get("hiddenLimits").is_some());
     }
 }

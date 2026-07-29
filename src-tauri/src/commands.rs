@@ -2,7 +2,7 @@ use serde_json::json;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::history::{HistoryLog, Sample};
+use crate::history::{HistoryLog, RawSample, Sample};
 use crate::poller::RefreshSignal;
 use crate::state::{AppState, Layout, Mascot, Size, TrayStyle};
 
@@ -18,6 +18,7 @@ pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
         "trayStyle": s.tray_style,
         "workDays": s.work_days,
         "probeFallback": s.probe_fallback,
+        "hiddenLimits": s.hidden_limits,
         "lastUsage": s.last_usage,
     })
 }
@@ -71,6 +72,13 @@ pub fn set_work_days(app: AppHandle, days: Vec<bool>) {
 }
 
 #[tauri::command]
+pub fn set_hidden_limits(app: AppHandle, ids: Vec<String>) {
+    app.state::<AppState>().0.lock().unwrap().hidden_limits = ids;
+    crate::state::save(&app);
+    crate::tray::emit_state(&app);
+}
+
+#[tauri::command]
 pub fn set_probe_fallback(app: AppHandle, enabled: bool) {
     app.state::<AppState>().0.lock().unwrap().probe_fallback = enabled;
     crate::state::save(&app);
@@ -93,9 +101,11 @@ pub fn get_history(log: State<'_, HistoryLog>) -> Vec<Sample> {
 }
 
 /// One-time migration of the pre-backend localStorage history (see
-/// `history::import` for the merge rules).
+/// `history::import` for the merge rules). Takes raw samples, so a payload
+/// written in the old fixed-window shape still imports.
 #[tauri::command]
-pub fn import_history(app: AppHandle, samples: Vec<Sample>) {
+pub fn import_history(app: AppHandle, samples: Vec<RawSample>) {
+    let samples: Vec<Sample> = samples.into_iter().map(RawSample::normalize).collect();
     {
         let log = app.state::<HistoryLog>();
         let mut log = log.0.lock().unwrap();

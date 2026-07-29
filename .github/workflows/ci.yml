@@ -80,4 +80,26 @@ jobs:
 
       - run: npm ci
       - run: npm run tauri build -- --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
+
+      # Guard for runner images that ship without the WebView2 Runtime: test
+      # for the actual binaries (the EdgeUpdate registry entry can outlive
+      # them, and the bootstrapper no-ops while it says "installed"). The
+      # elevated-session DevTools regression in WebView2 150+ is handled in
+      # the harness itself (see settings-window.e2e.mjs).
+      - name: Install WebView2 Runtime if missing
+        run: |
+          $glob = 'C:\Program Files (x86)\Microsoft\EdgeWebView\Application\*\msedgewebview2.exe'
+          $exe = Get-ChildItem $glob -ErrorAction SilentlyContinue
+          if ($exe) { Write-Host "WebView2 Runtime present: $($exe.Directory.Name)"; exit 0 }
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          if (Test-Path $key) { Write-Host 'clearing stale runtime registration'; Remove-Item $key -Recurse -Force }
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile "$env:TEMP\MicrosoftEdgeWebview2Setup.exe"
+          Start-Process "$env:TEMP\MicrosoftEdgeWebview2Setup.exe" -ArgumentList '/silent','/install' -Wait
+          $exe = Get-ChildItem $glob -ErrorAction SilentlyContinue
+          if (-not $exe) {
+            Get-ChildItem 'C:\Program Files (x86)\Microsoft\EdgeWebView' -Recurse -Depth 2 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+            throw 'WebView2 Runtime installation failed'
+          }
+          Write-Host "WebView2 Runtime installed: $($exe.Directory.Name)"
+
       - run: npm run test:e2e

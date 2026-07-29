@@ -1,21 +1,32 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-export interface UsageWindow {
+/** One usage limit window, as usage.rs parses it out of the API's `limits`. */
+export interface LimitWindow {
+  /** Stable id: "session", "weekly_all", or "<kind>:<model-slug>". */
+  id: string;
+  /** Tile label: "5h", "7d", or the scoped model's name ("Fable"). */
+  label: string;
   /** 0-100 percent */
   utilization: number;
   /** unix epoch seconds */
   resetAt: number | null;
+  /** A last known value the poll couldn't observe (`carry_missing_windows` in
+   *  usage.rs); absent on live windows. */
+  stale?: boolean;
 }
+
+/** Well-known window ids; mirrors `ID_SESSION`/`ID_WEEKLY_ALL` in usage.rs. */
+export const SESSION_ID = "session";
+export const WEEKLY_ALL_ID = "weekly_all";
 
 export interface UsageSnapshot {
   status: "ok" | "error";
   source: "oauth" | "messages" | null;
   /** unix epoch ms */
   fetchedAt: number;
-  fiveHour: UsageWindow | null;
-  sevenDay: UsageWindow | null;
-  fiveHourStatus: string | null;
+  /** Every window the poll reported, in the API's order; empty on failure. */
+  windows: LimitWindow[];
   error: string | null;
 }
 
@@ -23,12 +34,8 @@ export interface UsageSnapshot {
 export interface HistorySample {
   /** unix epoch ms */
   ms: number;
-  /** 0-100 percent, null when the poll lacked that window */
-  five: number | null;
-  week: number | null;
-  /** each window's reset time (epoch ms); absent on samples from older builds */
-  fiveReset?: number | null;
-  weekReset?: number | null;
+  /** window id → sample; absent ids mean the poll lacked that window */
+  w: Record<string, { pct: number; reset?: number | null }>;
 }
 
 /** Mirrors the Rust `Layout` enum (state.rs). */
@@ -62,6 +69,8 @@ export interface Preferences {
   workDays: boolean[];
   /** Whether a failing usage endpoint may fall back to the 1-token probe. */
   probeFallback: boolean;
+  /** Ids of limit windows the user hid; they get no tile. */
+  hiddenLimits: string[];
 }
 
 export interface AppStateSnapshot extends Preferences {
@@ -80,6 +89,7 @@ export const setLayout = (layout: Layout) => invoke<void>("set_layout", { layout
 export const setSize = (size: Size) => invoke<void>("set_size", { size });
 export const setTrayStyle = (style: TrayStyle) => invoke<void>("set_tray_style", { style });
 export const setWorkDays = (days: boolean[]) => invoke<void>("set_work_days", { days });
+export const setHiddenLimits = (ids: string[]) => invoke<void>("set_hidden_limits", { ids });
 export const setProbeFallback = (enabled: boolean) =>
   invoke<void>("set_probe_fallback", { enabled });
 /** Size the widget for a logical width, height locked to the layout's aspect

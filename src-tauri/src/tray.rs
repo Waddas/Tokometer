@@ -142,6 +142,7 @@ pub fn emit_state(app: &AppHandle) {
             "trayStyle": s.tray_style,
             "workDays": s.work_days,
             "probeFallback": s.probe_fallback,
+            "hiddenLimits": s.hidden_limits,
             "visible": visible,
         })
     };
@@ -167,14 +168,25 @@ pub fn update(app: &AppHandle, snapshot: &UsageSnapshot) {
         .lock()
         .unwrap()
         .tray_style;
-    let pct = |w: &Option<crate::usage::UsageWindow>| w.as_ref().map(|w| w.utilization);
-
     // `template` tints the icon to the macOS menubar (light/dark) — right for the
     // monochrome text and unknown glyphs, but it would strip the ring's colour.
     let (icon, template, line) = if snapshot.status == "ok" {
-        let five = pct(&snapshot.five_hour);
-        let fmt = |p: Option<f64>| p.map(|p| format!("{p:.0}%")).unwrap_or_else(|| "--".into());
-        let line = format!("5h {} • 7d {}", fmt(five), fmt(pct(&snapshot.seven_day)));
+        // Every window, hidden ones included: the tray is the at-a-glance summary.
+        let line = if snapshot.windows.is_empty() {
+            "--".to_string()
+        } else {
+            snapshot
+                .windows
+                .iter()
+                .map(|w| format!("{} {:.0}%", w.label, w.utilization))
+                .collect::<Vec<_>>()
+                .join(" • ")
+        };
+        let five = snapshot
+            .windows
+            .iter()
+            .find(|w| w.id == crate::usage::ID_SESSION)
+            .map(|w| w.utilization);
         let (icon, template) = match (five, style) {
             (Some(p), TrayStyle::Ring) => (crate::trayicon::gauge(p), false),
             (Some(p), TrayStyle::Text) => (crate::trayicon::text("5h", p), true),

@@ -116,13 +116,16 @@ h2 {
   text-align: center;
 }
 
-.days {
+/* Chip-style checkboxes: work days, and one per detected usage limit. */
+.days,
+.limits {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
 
-.days label {
+.days label,
+.limits label {
   border: 1px solid var(--track);
   border-radius: 6px;
   color: var(--dim);
@@ -131,11 +134,13 @@ h2 {
   cursor: pointer;
 }
 
-.days label.on {
+.days label.on,
+.limits label.on {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.days input {
+.days input,
+.limits input {
   display: none;
 }

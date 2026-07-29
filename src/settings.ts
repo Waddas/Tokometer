@@ -98,6 +98,36 @@ const dayBoxes = new Map<number, { label: HTMLLabelElement; input: HTMLInputElem
   }
 }
 
+/* ---- limits: one toggle per window the last poll reported; unchecking one
+ * hides its tile. Sent as the whole hidden-id array. New limits arrive checked,
+ * so a limit the API starts reporting shows up on its own. ---- */
+const limitsBox = document.getElementById("limits")!;
+const limitsHint = document.getElementById("limits-hint")!;
+let hiddenLimits: string[] = [];
+let limitWindows: api.LimitWindow[] = [];
+
+function renderLimits() {
+  limitsBox.replaceChildren();
+  limitsHint.hidden = limitWindows.length > 0;
+  for (const w of limitWindows) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = !hiddenLimits.includes(w.id);
+    label.classList.toggle("on", input.checked);
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(w.label));
+    input.addEventListener("change", () => {
+      hiddenLimits = input.checked
+        ? hiddenLimits.filter((id) => id !== w.id)
+        : [...hiddenLimits, w.id];
+      void api.setHiddenLimits(hiddenLimits);
+      label.classList.toggle("on", input.checked);
+    });
+    limitsBox.appendChild(label);
+  }
+}
+
 function render(prefs: api.Preferences) {
   markLayout(prefs.layout);
   // A free-resized widget matches no preset; say what it is instead.
@@ -115,6 +145,8 @@ function render(prefs: api.Preferences) {
     input.checked = prefs.workDays[day];
     label.classList.toggle("on", prefs.workDays[day]);
   }
+  hiddenLimits = [...prefs.hiddenLimits];
+  renderLimits();
 }
 
 // The window is created hidden (commands.rs) because the webview flashes
@@ -125,12 +157,21 @@ function render(prefs: api.Preferences) {
 // showed the window.
 void api
   .getState()
-  .then(render)
+  .then((st) => {
+    limitWindows = st.lastUsage?.windows ?? [];
+    render(st);
+  })
   .finally(() => {
     const win = getCurrentWindow();
     void win.show().then(() => win.setFocus());
   });
 void api.onStateChange(render);
+// A poll can detect a new limit while this window is open.
+void api.onUsage((s) => {
+  if (s.status !== "ok") return;
+  limitWindows = s.windows;
+  renderLimits();
+});
 void api.getAutostart().then((on) => (autostartBox.checked = on));
 void getVersion().then((v) => {
   document.getElementById("version")!.textContent = `Tokometer ${v}`;

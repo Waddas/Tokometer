@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { UsageHistory } from "./history";
-import type { UsageSnapshot } from "./api";
+import { SESSION_ID, WEEKLY_ALL_ID, type UsageSnapshot } from "./api";
 
 function snapshot(
   fetchedAt: number,
@@ -9,15 +9,14 @@ function snapshot(
   /** epoch seconds, as the API reports it */
   fiveReset: number | null = null,
 ): UsageSnapshot {
-  return {
-    status: "ok",
-    source: "oauth",
-    fetchedAt,
-    fiveHour: five === null ? null : { utilization: five, resetAt: fiveReset },
-    sevenDay: week === null ? null : { utilization: week, resetAt: null },
-    fiveHourStatus: null,
-    error: null,
-  };
+  const windows = [];
+  if (five !== null) {
+    windows.push({ id: SESSION_ID, label: "5h", utilization: five, resetAt: fiveReset });
+  }
+  if (week !== null) {
+    windows.push({ id: WEEKLY_ALL_ID, label: "7d", utilization: week, resetAt: null });
+  }
+  return { status: "ok", source: "oauth", fetchedAt, windows, error: null };
 }
 
 const MIN = 60_000;
@@ -27,19 +26,33 @@ describe("UsageHistory", () => {
     const h = new UsageHistory();
     h.sample(snapshot(0, 10, 5), 0);
     h.sample(snapshot(MIN, 12, null), MIN);
-    expect(h.points("five", 0, null)).toEqual([
+    expect(h.points(SESSION_ID, 0, null)).toEqual([
       { ms: 0, pct: 10 },
       { ms: MIN, pct: 12 },
     ]);
-    // Null windows are skipped per key, not dropped entirely.
-    expect(h.points("week", 0, null)).toEqual([{ ms: 0, pct: 5 }]);
+    // Windows the poll lacked are skipped per id, not dropped entirely.
+    expect(h.points(WEEKLY_ALL_ID, 0, null)).toEqual([{ ms: 0, pct: 5 }]);
+  });
+
+  it("records every window in the snapshot, scoped ones included", () => {
+    const h = new UsageHistory();
+    const s = snapshot(0, 10, null);
+    s.windows.push({ id: "weekly_scoped:fable", label: "Fable", utilization: 21, resetAt: 18_000 });
+    h.sample(s, 0);
+    expect(h.points("weekly_scoped:fable", 0, 18_000_000)).toEqual([{ ms: 0, pct: 21 }]);
+  });
+
+  it("serves nothing for a window the log has never seen", () => {
+    const h = new UsageHistory();
+    h.sample(snapshot(0, 10, null), 0);
+    expect(h.points("monthly_all", 0, null)).toEqual([]);
   });
 
   it("filters points by window start", () => {
     const h = new UsageHistory();
     h.sample(snapshot(0, 10, null), 0);
     h.sample(snapshot(10 * MIN, 20, null), 10 * MIN);
-    expect(h.points("five", 5 * MIN, null)).toEqual([{ ms: 10 * MIN, pct: 20 }]);
+    expect(h.points(SESSION_ID, 5 * MIN, null)).toEqual([{ ms: 10 * MIN, pct: 20 }]);
   });
 
   it("ignores error snapshots and near-duplicate fetches", () => {
@@ -47,7 +60,7 @@ describe("UsageHistory", () => {
     h.sample(snapshot(0, 10, null), 0);
     h.sample(snapshot(0, 10, null), 5_000); // startup replay of the same poll
     h.sample({ ...snapshot(MIN, 50, null), status: "error" }, MIN);
-    expect(h.points("five", 0, null)).toHaveLength(1);
+    expect(h.points(SESSION_ID, 0, null)).toHaveLength(1);
   });
 
   it("segments points by the current reset time, dropping other windows'", () => {
@@ -55,10 +68,10 @@ describe("UsageHistory", () => {
     const HOUR = 60 * MIN;
     h.sample(snapshot(1 * HOUR, 80, null, (6 * HOUR) / 1000), 1 * HOUR);
     h.sample(snapshot(8 * HOUR, 5, null, (13 * HOUR) / 1000), 8 * HOUR);
-    expect(h.points("five", 0, 13 * HOUR)).toEqual([{ ms: 8 * HOUR, pct: 5 }]);
+    expect(h.points(SESSION_ID, 0, 13 * HOUR)).toEqual([{ ms: 8 * HOUR, pct: 5 }]);
     // Unstamped legacy samples survive on the time filter alone.
     h.sample(snapshot(9 * HOUR, 12, null), 9 * HOUR);
-    expect(h.points("five", 0, 13 * HOUR)).toHaveLength(2);
+    expect(h.points(SESSION_ID, 0, 13 * HOUR)).toHaveLength(2);
   });
 
   it("keeps only unstamped samples while no window is running", () => {
@@ -66,17 +79,23 @@ describe("UsageHistory", () => {
     const HOUR = 60 * MIN;
     h.sample(snapshot(1 * HOUR, 80, null, (6 * HOUR) / 1000), 1 * HOUR);
     h.sample(snapshot(7 * HOUR, 0, null), 7 * HOUR); // polled during the lapse
-    expect(h.points("five", 0, null)).toEqual([{ ms: 7 * HOUR, pct: 0 }]);
+    expect(h.points(SESSION_ID, 0, null)).toEqual([{ ms: 7 * HOUR, pct: 0 }]);
   });
 
   it("serves the backend log after load, replacing prior samples", () => {
     const h = new UsageHistory();
     h.sample(snapshot(50 * MIN, 99, null), 50 * MIN);
     h.load([
-      { ms: 0, five: 10, week: null },
-      { ms: MIN, five: 12, week: 3, fiveReset: 5 * 60 * MIN * 1000 },
+      { ms: 0, w: { [SESSION_ID]: { pct: 10, reset: null } } },
+      {
+        ms: MIN,
+        w: {
+          [SESSION_ID]: { pct: 12, reset: 5 * 60 * MIN * 1000 },
+          [WEEKLY_ALL_ID]: { pct: 3, reset: null },
+        },
+      },
     ]);
-    expect(h.points("five", 0, 5 * 60 * MIN * 1000)).toEqual([
+    expect(h.points(SESSION_ID, 0, 5 * 60 * MIN * 1000)).toEqual([
       { ms: 0, pct: 10 },
       { ms: MIN, pct: 12 },
     ]);
@@ -102,7 +121,7 @@ describe("previousWindow", () => {
   }
 
   it("segments the previous window by its polled reset time, not wall-clock arithmetic", () => {
-    const prev = twoWindows().previousWindow("five", 13 * HOUR, WINDOW);
+    const prev = twoWindows().previousWindow(SESSION_ID, 13 * HOUR, WINDOW);
     expect(prev).not.toBeNull();
     expect(prev!.resetMs).toBe(6 * HOUR);
     expect(prev!.pts).toEqual([
@@ -113,7 +132,7 @@ describe("previousWindow", () => {
   });
 
   it("excludes the current window's own samples", () => {
-    const prev = twoWindows().previousWindow("five", 13 * HOUR, WINDOW)!;
+    const prev = twoWindows().previousWindow(SESSION_ID, 13 * HOUR, WINDOW)!;
     expect(prev.pts.every((p) => p.ms <= 6 * HOUR)).toBe(true);
   });
 
@@ -122,7 +141,7 @@ describe("previousWindow", () => {
     h.sample(snapshot(1 * HOUR, 10, null, sec(6 * HOUR)), 1 * HOUR);
     h.sample(snapshot(2 * HOUR, 30, null, sec(6 * HOUR) + 45), 2 * HOUR);
     h.sample(snapshot(8 * HOUR, 5, null, sec(13 * HOUR)), 8 * HOUR);
-    const prev = h.previousWindow("five", 13 * HOUR, WINDOW)!;
+    const prev = h.previousWindow(SESSION_ID, 13 * HOUR, WINDOW)!;
     expect(prev.pts).toHaveLength(2);
   });
 
@@ -130,7 +149,7 @@ describe("previousWindow", () => {
     const h = new UsageHistory();
     h.sample(snapshot(1 * HOUR, 10, null, sec(6 * HOUR)), 1 * HOUR);
     h.sample(snapshot(5 * HOUR, 80, null, sec(6 * HOUR)), 5 * HOUR);
-    const prev = h.previousWindow("five", null, WINDOW)!;
+    const prev = h.previousWindow(SESSION_ID, null, WINDOW)!;
     expect(prev.resetMs).toBe(6 * HOUR);
     expect(prev.pts).toHaveLength(2);
   });
@@ -139,14 +158,14 @@ describe("previousWindow", () => {
     const h = new UsageHistory();
     h.sample(snapshot(5 * HOUR, 2, null, sec(6 * HOUR)), 5 * HOUR);
     h.sample(snapshot(8 * HOUR, 5, null, sec(13 * HOUR)), 8 * HOUR);
-    expect(h.previousWindow("five", 13 * HOUR, WINDOW)).toBeNull();
+    expect(h.previousWindow(SESSION_ID, 13 * HOUR, WINDOW)).toBeNull();
   });
 
   it("returns null for samples from older builds that carry no reset time", () => {
     const h = new UsageHistory();
     h.sample(snapshot(1 * HOUR, 10, null), 1 * HOUR);
     h.sample(snapshot(3 * HOUR, 40, null), 3 * HOUR);
-    expect(h.previousWindow("five", 13 * HOUR, WINDOW)).toBeNull();
+    expect(h.previousWindow(SESSION_ID, 13 * HOUR, WINDOW)).toBeNull();
   });
 
   it("keeps only samples inside the previous window's actual span", () => {
@@ -156,7 +175,7 @@ describe("previousWindow", () => {
     h.sample(snapshot(3 * HOUR, 40, null, sec(6 * HOUR)), 3 * HOUR);
     h.sample(snapshot(6.5 * HOUR, 40, null, sec(6 * HOUR)), 6.5 * HOUR);
     h.sample(snapshot(8 * HOUR, 5, null, sec(13 * HOUR)), 8 * HOUR);
-    const prev = h.previousWindow("five", 13 * HOUR, WINDOW)!;
+    const prev = h.previousWindow(SESSION_ID, 13 * HOUR, WINDOW)!;
     expect(prev.pts.map((p) => p.ms)).toEqual([1 * HOUR, 3 * HOUR]);
   });
 });
