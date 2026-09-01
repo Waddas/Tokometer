@@ -106,9 +106,37 @@ export const getHistory = () => invoke<HistorySample[]>("get_history");
 export const importHistory = (samples: HistorySample[]) =>
   invoke<void>("import_history", { samples });
 
+/** Mirrors `UpdatePhase` in update.rs: a check parks a newer release as
+ * `available` until the user installs it. */
+export type UpdatePhase =
+  | { phase: "idle" }
+  | { phase: "checking" }
+  /** `dismissed`: the user hid this release's dots; it stays installable. */
+  | { phase: "available"; version: string; dismissed: boolean }
+  | { phase: "installing"; version: string }
+  | { phase: "up-to-date" }
+  | { phase: "failed"; reason: string };
+
+export const getUpdatePhase = () => invoke<UpdatePhase>("get_update_phase");
+export const checkForUpdates = () => invoke<void>("check_for_updates");
+/** Download, install and relaunch the release a check found. */
+export const installUpdate = () => invoke<void>("install_update");
+/** Hide the offered release's dots (widget and tray) until a newer one appears. */
+export const dismissUpdate = () => invoke<void>("dismiss_update");
+
 /** Dev/screenshot aid: mirror a mock snapshot in the tray icon (null clears it). */
 export const setTrayOverride = (snapshot: UsageSnapshot | null) =>
   invoke<void>("set_tray_override", { snapshot });
+
+/** Dev/screenshot aid: offer a mock release (or withdraw it). */
+export const setUpdateOverride = (available: boolean) =>
+  invoke<void>("set_update_override", { available });
+
+/** Current update phase now and on every change. */
+export const onUpdatePhase = (cb: (u: UpdatePhase) => void): Promise<UnlistenFn> => {
+  void getUpdatePhase().then(cb);
+  return listen<UpdatePhase>("update://state", (e) => cb(e.payload));
+};
 
 export const onUsage = (cb: (s: UsageSnapshot) => void): Promise<UnlistenFn> =>
   listen<UsageSnapshot>("usage://update", (e) => cb(e.payload));

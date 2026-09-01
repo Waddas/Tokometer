@@ -99,8 +99,9 @@ Grab the latest installer for your platform from the
 - **Windows** — `.msi` or NSIS `.exe`
 - **Linux** — `.AppImage`, `.deb`, or `.rpm`
 
-Tokometer ships with an auto-updater, so you'll be prompted when a new version
-is available.
+Tokometer checks for new releases on launch and shows a small dot on the
+widget when one is waiting; update from the tray menu or **Settings** whenever
+you like.
 
 > **macOS Gatekeeper / Windows SmartScreen:** the app isn't code-signed yet, so
 > your OS may warn on first launch. On macOS, right-click the app → **Open**; on

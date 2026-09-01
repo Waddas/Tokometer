@@ -378,6 +378,21 @@ body:hover #controls {
 #btn-pin.pinned {
   color: var(--accent);
 }
+/* Update-available dot on the settings gear's corner; fades with the controls
+ * (the tray icon carries the always-visible dot). */
+#btn-settings {
+  position: relative;
+}
+#update-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  pointer-events: none;
+}
 
 /* ---- resize grip: bottom-right of the widget (real pixels) ---- */
 #resize-handle {

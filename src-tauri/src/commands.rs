@@ -121,20 +121,36 @@ pub fn import_history(app: AppHandle, samples: Vec<RawSample>) {
 #[tauri::command]
 pub fn set_tray_override(app: AppHandle, snapshot: Option<crate::usage::UsageSnapshot>) {
     *app.state::<crate::tray::DevOverride>().0.lock().unwrap() = snapshot;
-    // Re-render now. update() re-applies the override; fall back to the last live
-    // snapshot so clearing the override restores the real figure immediately.
-    let render = {
-        let ov = app
-            .state::<crate::tray::DevOverride>()
-            .0
-            .lock()
-            .unwrap()
-            .clone();
-        ov.or_else(|| app.state::<AppState>().0.lock().unwrap().last_usage.clone())
-    };
-    if let Some(snapshot) = render {
-        crate::tray::update(&app, &snapshot);
-    }
+    crate::tray::refresh(&app);
+}
+
+#[tauri::command]
+pub fn get_update_phase(app: AppHandle) -> crate::update::UpdatePhase {
+    crate::update::phase(&app)
+}
+
+#[tauri::command]
+pub fn check_for_updates(app: AppHandle) {
+    crate::update::spawn_check(app);
+}
+
+#[tauri::command]
+pub fn install_update(app: AppHandle) {
+    crate::update::spawn_install(app);
+}
+
+/// Hide the update-available dots for the offered release; the release stays
+/// installable from the tray item and settings.
+#[tauri::command]
+pub fn dismiss_update(app: AppHandle) {
+    crate::update::dismiss(&app);
+}
+
+/// Dev/screenshot aid: offer a mock release (or withdraw it) so the update
+/// UI can be previewed. No-op in release builds.
+#[tauri::command]
+pub fn set_update_override(app: AppHandle, available: bool) {
+    crate::update::set_override(&app, available);
 }
 
 #[tauri::command]
@@ -244,17 +260,10 @@ pub fn apply_mascot(app: &AppHandle, mascot: Mascot) {
 /// Single mutation path for the tray icon style — persists and re-renders the
 /// icon from the last poll result.
 pub fn apply_tray_style(app: &AppHandle, style: TrayStyle) {
-    let snapshot = {
-        let state = app.state::<AppState>();
-        let mut s = state.0.lock().unwrap();
-        s.tray_style = style;
-        s.last_usage.clone()
-    };
+    app.state::<AppState>().0.lock().unwrap().tray_style = style;
     crate::state::save(app);
     crate::tray::emit_state(app);
-    if let Some(snapshot) = snapshot {
-        crate::tray::update(app, &snapshot);
-    }
+    crate::tray::refresh(app);
 }
 
 /// One step of the corner-grip drag (see main.ts): size the window for the

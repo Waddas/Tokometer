@@ -17,6 +17,13 @@ pub struct DevOverride(pub Mutex<Option<UsageSnapshot>>);
 pub struct TrayHandles {
     pub tray: TrayIcon,
     pub status_item: MenuItem<Wry>,
+    /// "Check for updates…" until a check finds a release, then "Update to X…"
+    /// (relabelled by update.rs).
+    pub update_item: MenuItem<Wry>,
+    /// "Hide the update dot": in the menu only while a dot is showing
+    /// (see `set_dismiss_offered`).
+    dismiss_item: MenuItem<Wry>,
+    menu: Menu<Wry>,
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
@@ -24,10 +31,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let show_hide = MenuItem::with_id(app, "show_hide", "Show / Hide widget", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let refresh = MenuItem::with_id(app, "refresh", "Refresh now", true, None::<&str>)?;
-    let check_updates = MenuItem::with_id(
+    let update_item = MenuItem::with_id(app, "update", "Check for updates…", true, None::<&str>)?;
+    let dismiss_item = MenuItem::with_id(
         app,
-        "check_updates",
-        "Check for updates…",
+        "dismiss_update",
+        "Hide the update dot",
         true,
         None::<&str>,
     )?;
@@ -55,14 +63,14 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     };
     let sep_top = PredefinedMenuItem::separator(app)?;
     let sep_bottom = PredefinedMenuItem::separator(app)?;
-    let mut items: Vec<&dyn IsMenuItem<Wry>> = vec![&status_item, &sep_top, &show_hide, &settings];
+    let mut items: Vec<&dyn IsMenuItem<Wry>> =
+        vec![&status_item, &refresh, &sep_top, &show_hide, &settings];
     if let Some(item) = &hide_devbar {
         items.push(item);
     }
     items.extend([
         &sep_bottom as &dyn IsMenuItem<Wry>,
-        &refresh,
-        &check_updates,
+        &update_item,
         &version,
         &quit,
     ]);
@@ -86,7 +94,8 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                     }
                 }
                 "refresh" => app.state::<crate::poller::RefreshSignal>().0.notify_one(),
-                "check_updates" => crate::update::spawn_check(app.clone()),
+                "update" => crate::update::activate(app),
+                "dismiss_update" => crate::update::dismiss(app),
                 "quit" => {
                     crate::state::save(app);
                     app.exit(0);
@@ -106,8 +115,36 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    app.manage(TrayHandles { tray, status_item });
+    app.manage(TrayHandles {
+        tray,
+        status_item,
+        update_item,
+        dismiss_item,
+        menu,
+    });
     Ok(())
+}
+
+/// Put "Hide the update dot" under the update item while a dot is showing,
+/// and take it out again once there is nothing to hide.
+pub fn set_dismiss_offered(app: &AppHandle, offered: bool) {
+    let Some(h) = app.try_state::<TrayHandles>() else {
+        return;
+    };
+    let present = h.menu.get(h.dismiss_item.id()).is_some();
+    if offered && !present {
+        let after_update = h
+            .menu
+            .items()
+            .ok()
+            .and_then(|items| items.iter().position(|i| i.id() == h.update_item.id()))
+            .map(|pos| pos + 1);
+        if let Some(pos) = after_update {
+            let _ = h.menu.insert(&h.dismiss_item, pos);
+        }
+    } else if !offered && present {
+        let _ = h.menu.remove(&h.dismiss_item);
+    }
 }
 
 pub fn toggle_visibility(app: &AppHandle) {
@@ -147,6 +184,29 @@ pub fn emit_state(app: &AppHandle) {
         })
     };
     let _ = app.emit("state://change", payload);
+}
+
+/// Re-render the tray from what it last showed: the dev override, else the
+/// last poll. For changes that alter the icon without a new poll (tray style,
+/// the update badge).
+pub fn refresh(app: &AppHandle) {
+    let snapshot = app
+        .state::<DevOverride>()
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .or_else(|| {
+            app.state::<crate::state::AppState>()
+                .0
+                .lock()
+                .unwrap()
+                .last_usage
+                .clone()
+        });
+    if let Some(snapshot) = snapshot {
+        update(app, &snapshot);
+    }
 }
 
 /// Reflect the latest poll result in the tray: the 5h percentage (or a flat
@@ -198,6 +258,11 @@ pub fn update(app: &AppHandle, snapshot: &UsageSnapshot) {
         (crate::trayicon::unknown(), true, err)
     };
 
+    let icon = if crate::update::badge_wanted(app) {
+        crate::trayicon::badge(icon)
+    } else {
+        icon
+    };
     // Re-assert the template flag each time: plain set_icon would clear it.
     let _ = handles.tray.set_icon_with_as_template(Some(icon), template);
     let _ = handles

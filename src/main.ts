@@ -182,6 +182,14 @@ btnRefresh.addEventListener("click", () => void api.refreshNow());
 btnSettings.addEventListener("click", () => void api.openSettings());
 btnHide.addEventListener("click", () => void api.toggleVisibility());
 
+/* ---- update available: a dot on the settings gear; settings offers the install ---- */
+const updateDot = document.getElementById("update-dot")!;
+void api.onUpdatePhase((u) => {
+  const offered = u.phase === "available" && !u.dismissed;
+  updateDot.hidden = !offered;
+  btnSettings.title = offered ? `Settings — update ${u.version} available` : "Settings";
+});
+
 /* ---- status line: friendly guidance when polling fails ---- */
 // Kept terse: the widget can be very narrow, and the raw error sits in the
 // element's tooltip for anyone who wants the details.
@@ -253,12 +261,13 @@ void api.onUsage((s) => {
 });
 
 /* ---- dev: D toggles dev mode, shown as a badge in the top strip. While on,
- * M cycles the data source (live → mock → mock-stale → error) and A cycles
- * the mascot animation; leaving dev mode resets both. ---- */
+ * M cycles the data source (live → mock → mock-stale → error), A cycles the
+ * mascot animation and U offers a mock update; leaving dev mode resets all. ---- */
 if (import.meta.env.DEV) {
   let devMode = false;
   let pinnedAnim = -1; // -1 = automatic rate-grouped rotation
   let barHidden = false; // tray "Hide dev bar" — keeps dev mode on for captures
+  let updateMocked = false;
   // "mock-stale" is the same mock served by the fallback probe: its scoped
   // window is a carried-over value, so that tile renders dimmed.
   const SOURCES = ["live", "mock", "mock-stale", "error"] as const;
@@ -272,7 +281,7 @@ if (import.meta.env.DEV) {
   function renderBadge() {
     badge.hidden = !devMode || barHidden;
     const anim = pinnedAnim === -1 ? "auto" : splash.animationNames()[pinnedAnim];
-    badge.textContent = `dev · ${devSource} · ${anim}`;
+    badge.textContent = `dev · ${devSource} · ${anim}${updateMocked ? " · update" : ""}`;
   }
 
   void api.onDevBarHidden((hidden) => {
@@ -320,6 +329,12 @@ if (import.meta.env.DEV) {
     renderBadge();
   }
 
+  function setUpdateMock(on: boolean) {
+    updateMocked = on;
+    void api.setUpdateOverride(on);
+    renderBadge();
+  }
+
   window.addEventListener("keydown", (e) => {
     if (e.repeat) return;
     switch (e.key.toLowerCase()) {
@@ -328,6 +343,7 @@ if (import.meta.env.DEV) {
         if (!devMode) {
           void setSource("live");
           setAnim(-1);
+          setUpdateMock(false);
         }
         renderBadge();
         break;
@@ -340,6 +356,9 @@ if (import.meta.env.DEV) {
           const count = splash.animationNames().length;
           setAnim(pinnedAnim + 1 >= count ? -1 : pinnedAnim + 1);
         }
+        break;
+      case "u":
+        if (devMode) setUpdateMock(!updateMocked);
         break;
     }
   });
