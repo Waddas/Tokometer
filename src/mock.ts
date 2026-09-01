@@ -106,15 +106,35 @@ function mondayBefore(ms: number, weeks: number): number {
 
 /** Which poll to preview: one the oauth endpoint served in full, a
  *  fallback-probe one whose scoped window is a carried-over last known value
- *  (`carry_missing_windows` in usage.rs), or a quiet account barely using
- *  either window. */
+ *  (`carry_missing_windows` in usage.rs), or a quiet account early in both
+ *  windows with little used, so the prediction line runs long. */
 export type MockVariant = "fresh" | "stale-scoped" | "quiet";
 
-// How far each variant's windows have got: current and previous 5h and 7d.
+// Where each variant's windows stand: how far in (hours / days), the current
+// and previous percentages, and how heavy the learned profile is.
+const BUSY = {
+  fiveElapsedH: 3.5,
+  five: 72,
+  prevFive: 88,
+  weekElapsedD: 5,
+  week: 30,
+  prevWeek: 61,
+  scoped: 21,
+  intensity: 1,
+};
 const SHAPES = {
-  fresh: { five: 72, prevFive: 88, week: 30, prevWeek: 61, scoped: 21, intensity: 1 },
-  "stale-scoped": { five: 72, prevFive: 88, week: 30, prevWeek: 61, scoped: 21, intensity: 1 },
-  quiet: { five: 14, prevFive: 22, week: 9, prevWeek: 15, scoped: 6, intensity: 0.3 },
+  fresh: BUSY,
+  "stale-scoped": BUSY,
+  quiet: {
+    fiveElapsedH: 40 / 60,
+    five: 8,
+    prevFive: 22,
+    weekElapsedD: 1,
+    week: 6,
+    prevWeek: 15,
+    scoped: 4,
+    intensity: 0.3,
+  },
 } as const;
 
 export class MockHistory {
@@ -129,8 +149,8 @@ export class MockHistory {
 
   constructor(now = Date.now(), variant: MockVariant = "fresh") {
     const shape = SHAPES[variant];
-    // 5h window: 3.5h in; previous window lapsed 24 minutes before this one began.
-    const fiveEnd = now + 1.5 * HOUR;
+    // 5h window: previous window lapsed 24 minutes before this one began.
+    const fiveEnd = now + (5 - shape.fiveElapsedH) * HOUR;
     const fiveStart = fiveEnd - 5 * HOUR;
     this.prevFiveReset = fiveStart - 0.4 * HOUR;
     this.five = [
@@ -138,8 +158,8 @@ export class MockHistory {
       ...curve(fiveStart, now, MIN, shape.five),
     ];
 
-    // 7d window: 5 days in; previous week lapsed 10 hours before this one began.
-    const weekEnd = now + 2 * DAY;
+    // 7d window: previous week lapsed 10 hours before this one began.
+    const weekEnd = now + (7 - shape.weekElapsedD) * DAY;
     const weekStart = weekEnd - 7 * DAY;
     this.prevWeekReset = weekStart - 10 * HOUR;
     this.week = [
