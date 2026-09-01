@@ -2,7 +2,7 @@
 // the window will be `horizon` later, then scores the forecast against what
 // the log actually recorded. Runs on the synthetic user from mock.ts (a
 // strong weekly rhythm) so the profile model is held to beating the plain
-// slope it replaced, and on a real log when TOKOMETER_HISTORY points at a
+// slope extrapolation, and on a real log when TOKOMETER_HISTORY points at a
 // history.json.
 /// <reference types="node" />
 import { readFileSync } from "node:fs";

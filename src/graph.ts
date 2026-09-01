@@ -272,7 +272,7 @@ export class UsageGraph {
     let proj: Pt[] | null = null;
     const momentum = trendSlope(pts, cfg.trendMs, now);
     // Off, the momentum never decays and there is no profile to hand over to,
-    // which is exactly the constant-rate extrapolation the graph always drew.
+    // so the line is a constant-rate extrapolation of the recent slope.
     const profile = this.learnedForecast ? this.history.rateProfile(cfg.key) : NO_PROFILE;
     if (win.resetAt && now < end && (momentum !== null || profile.hasData)) {
       // The work-day mask only shapes the weekly window; the 5h projection is
