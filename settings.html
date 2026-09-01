@@ -55,6 +55,22 @@
         </p>
       </section>
 
+      <section>
+        <h2>Beta features</h2>
+        <p class="hint">
+          Previews of features still being tuned. All off by default; switch
+          one off again to get the previous behaviour back, nothing is lost.
+        </p>
+        <label class="check">
+          <input type="checkbox" id="beta-learned-forecast" /><span>Learned usage forecast</span>
+        </label>
+        <p class="hint indent">
+          Predicts from your usual usage at each hour of the week, learned from
+          the history log, blended with your current pace. Off, the dotted line
+          just extends your recent rate.
+        </p>
+      </section>
+
       <p class="version" id="version"></p>
     </main>
     <script type="module" src="/src/settings.ts"></script>

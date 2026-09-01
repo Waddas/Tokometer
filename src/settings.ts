@@ -98,6 +98,18 @@ const dayBoxes = new Map<number, { label: HTMLLabelElement; input: HTMLInputElem
   }
 }
 
+/* ---- beta features: one checkbox per flag, sent as the whole struct ---- */
+let beta: api.BetaFeatures = { learnedForecast: false };
+const BETA_BOXES: [keyof api.BetaFeatures, HTMLInputElement][] = [
+  ["learnedForecast", document.getElementById("beta-learned-forecast") as HTMLInputElement],
+];
+for (const [flag, box] of BETA_BOXES) {
+  box.addEventListener("change", () => {
+    beta = { ...beta, [flag]: box.checked };
+    void api.setBeta(beta);
+  });
+}
+
 /* ---- limits: one toggle per window the last poll reported; unchecking one
  * hides its tile. Sent as the whole hidden-id array. New limits arrive checked,
  * so a limit the API starts reporting shows up on its own. ---- */
@@ -147,6 +159,8 @@ function render(prefs: api.Preferences) {
   }
   hiddenLimits = [...prefs.hiddenLimits];
   renderLimits();
+  beta = { ...prefs.beta };
+  for (const [flag, box] of BETA_BOXES) box.checked = prefs.beta[flag];
 }
 
 // The window is created hidden (commands.rs) because the webview flashes

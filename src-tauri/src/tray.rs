@@ -143,6 +143,7 @@ pub fn emit_state(app: &AppHandle) {
             "workDays": s.work_days,
             "probeFallback": s.probe_fallback,
             "hiddenLimits": s.hidden_limits,
+            "beta": s.beta,
             "visible": visible,
         })
     };

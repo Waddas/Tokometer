@@ -167,6 +167,7 @@ pub fn run() {
             commands::set_work_days,
             commands::set_hidden_limits,
             commands::set_probe_fallback,
+            commands::set_beta,
             commands::resize_widget,
             commands::toggle_visibility,
             commands::open_settings,

@@ -3,7 +3,7 @@
 // Implements the graph's GraphSource interface; never touches localStorage.
 import { SESSION_ID, WEEKLY_ALL_ID, type UsageSnapshot } from "./api";
 import type { WindowSlice } from "./history";
-import type { Pt } from "./trend";
+import { RateProfile, type Pt } from "./trend";
 
 const MIN = 60_000;
 const HOUR = 3_600_000;
@@ -115,5 +115,12 @@ export class MockHistory {
     const resetMs = id === SESSION_ID ? this.prevFiveReset : this.prevWeekReset;
     const pts = series.filter((p) => p.ms <= resetMs && p.ms >= resetMs - windowMs);
     return pts.length >= 2 ? { pts, resetMs } : null;
+  }
+
+  rateProfile(id: string): RateProfile {
+    const series = this.series(id) ?? [];
+    return RateProfile.from(
+      series.slice(1).map((p, i) => ({ fromMs: series[i].ms, toMs: p.ms, pct: p.pct - series[i].pct })),
+    );
   }
 }
