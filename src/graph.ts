@@ -8,7 +8,14 @@
 import { SESSION_ID, WEEKLY_ALL_ID, type UsageSnapshot } from "./api";
 import type { UsageHistory } from "./history";
 import { AMBER_AT_PCT, RED_AT_PCT } from "./thresholds";
-import { RateProfile, trendSlope, projectUsage, type Pt } from "./trend";
+import {
+  RateProfile,
+  localMidnights,
+  projectUsage,
+  straighten,
+  trendSlope,
+  type Pt,
+} from "./trend";
 
 type Mode = "session" | "weekly";
 
@@ -274,12 +281,15 @@ export class UsageGraph {
         this.mode === "weekly"
           ? (ms: number) => this.workDays[new Date(ms).getDay()] !== false
           : () => true;
-      proj = projectUsage(now, end, win.utilization, {
+      const fine = projectUsage(now, end, win.utilization, {
         momentum,
         momentumTauMs: this.learnedForecast ? cfg.tauMs : Infinity,
         profile,
         isWorkDay,
       });
+      // Straight segments: one per day on the weekly view (the mask bends the
+      // line at midnight), a single run to the limit or the reset on the 5h.
+      proj = straighten(fine, this.mode === "weekly" ? localMidnights(now, end) : []);
       ctx.setLineDash([c, 6 * c]);
       this.strokePolyline(ctx, proj, gradient, x, y);
       ctx.setLineDash([]);

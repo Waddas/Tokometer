@@ -1,13 +1,15 @@
 // Forecast backtest: replays a usage log, and at each step forecasts where
 // the window will be `horizon` later, then scores the forecast against what
-// the log actually recorded. Runs on a synthetic user with a strong weekly
-// rhythm so the profile model is held to beating the plain slope it replaced,
-// and on a real log when TOKOMETER_HISTORY points at a history.json.
+// the log actually recorded. Runs on the synthetic user from mock.ts (a
+// strong weekly rhythm) so the profile model is held to beating the plain
+// slope it replaced, and on a real log when TOKOMETER_HISTORY points at a
+// history.json.
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SESSION_ID, WEEKLY_ALL_ID, type HistorySample } from "./api";
 import { UsageHistory } from "./history";
+import { syntheticLog } from "./mock";
 import { interpolate, projectUsage, trendSlope, type Pt } from "./trend";
 
 const MIN = 60_000;
@@ -90,68 +92,6 @@ function actualAt(rest: HistorySample[], id: string, resetMs: number, target: nu
   return interpolate(pts, target);
 }
 
-/** Deterministic LCG in [0, 1). */
-function rng(seed: number): () => number {
-  let x = seed >>> 0;
-  return () => {
-    x = (x * 1_664_525 + 1_013_904_223) >>> 0;
-    return x / 2 ** 32;
-  };
-}
-
-/**
- * A developer with a weekly rhythm: office hours Mon–Fri with a lunch dip,
- * a little in the evening, a quiet Saturday afternoon, bursty within the
- * hour. Weekly windows run back to back from Monday; a 5h window opens on
- * the first usage after a lapse. Percentages are integers like the API's.
- */
-function syntheticLog(weeks: number, seed = 7): HistorySample[] {
-  const random = rng(seed);
-  const start = new Date(2026, 0, 5).getTime(); // a Monday
-  const step = 15 * MIN;
-  const samples: HistorySample[] = [];
-  let week = 0;
-  let weekReset = start + 7 * DAY;
-  let session = 0;
-  let sessionReset: number | null = null;
-  let burst = 0;
-  for (let t = start; t < start + weeks * 7 * DAY; t += step) {
-    const d = new Date(t);
-    const day = d.getDay();
-    const hour = d.getHours() + d.getMinutes() / 60;
-    const weekday = day >= 1 && day <= 5;
-    let perHour = 0;
-    if (weekday && hour >= 9 && hour < 18) perHour = hour >= 12 && hour < 13 ? 0.15 : 0.9;
-    else if (weekday && hour >= 19 && hour < 22) perHour = 0.25;
-    else if (day === 6 && hour >= 13 && hour < 17) perHour = 0.3;
-    if (burst > 0) burst--;
-    else if (perHour > 0 && random() < 0.12) burst = 1 + Math.floor(random() * 4);
-    const factor = burst > 0 ? 2.5 : 0.6 + random() * 0.8;
-    const gain = (perHour * factor * step) / HOUR;
-
-    if (t >= weekReset) {
-      week = 0;
-      weekReset += 7 * DAY;
-    }
-    if (sessionReset !== null && t >= sessionReset) {
-      session = 0;
-      sessionReset = null;
-    }
-    if (gain > 0 && sessionReset === null) sessionReset = t + 5 * HOUR;
-    week = Math.min(100, week + gain);
-    if (sessionReset !== null) session = Math.min(100, session + gain * 11);
-
-    samples.push({
-      ms: t,
-      w: {
-        [SESSION_ID]: { pct: Math.round(session), reset: sessionReset },
-        [WEEKLY_ALL_ID]: { pct: Math.round(week), reset: weekReset },
-      },
-    });
-  }
-  return samples;
-}
-
 function report(label: string, s: Scores): string {
   if (s.n === 0) return `${label.padEnd(14)} no scorable steps (log too sparse)`;
   const f = (x: number) => x.toFixed(2).padStart(6);
@@ -159,7 +99,8 @@ function report(label: string, s: Scores): string {
 }
 
 describe("forecast backtest (synthetic weekly rhythm)", () => {
-  const log = syntheticLog(8);
+  const start = new Date(2026, 0, 5).getTime(); // a Monday
+  const log = syntheticLog(start, start + 8 * 7 * DAY);
   const scoreFrom = log[0].ms + 3 * 7 * DAY; // three weeks of learning first
 
   it("beats the plain slope on the 7-day window a day and 4 hours ahead", () => {

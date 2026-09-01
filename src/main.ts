@@ -253,15 +253,16 @@ void api.onUsage((s) => {
 });
 
 /* ---- dev: D toggles dev mode, shown as a badge in the top strip. While on,
- * M cycles the data source (live → mock → mock-stale → error) and A cycles
- * the mascot animation; leaving dev mode resets both. ---- */
+ * M cycles the data source (live → mock → mock-stale → mock-quiet → error)
+ * and A cycles the mascot animation; leaving dev mode resets both. ---- */
 if (import.meta.env.DEV) {
   let devMode = false;
   let pinnedAnim = -1; // -1 = automatic rate-grouped rotation
   let barHidden = false; // tray "Hide dev bar" — keeps dev mode on for captures
   // "mock-stale" is the same mock served by the fallback probe: its scoped
   // window is a carried-over value, so that tile renders dimmed.
-  const SOURCES = ["live", "mock", "mock-stale", "error"] as const;
+  const SOURCES = ["live", "mock", "mock-stale", "mock-quiet", "error"] as const;
+  const MOCK_VARIANTS = { mock: "fresh", "mock-stale": "stale-scoped", "mock-quiet": "quiet" } as const;
   let devSource: (typeof SOURCES)[number] = "live";
 
   const badge = document.createElement("div");
@@ -294,8 +295,8 @@ if (import.meta.env.DEV) {
       if (devSource === src) return;
       devSource = src;
       mockActive = src !== "live";
-      if (src === "mock" || src === "mock-stale") {
-        const mock = new MockHistory(Date.now(), src === "mock" ? "fresh" : "stale-scoped");
+      if (src in MOCK_VARIANTS) {
+        const mock = new MockHistory(Date.now(), MOCK_VARIANTS[src as keyof typeof MOCK_VARIANTS]);
         graph.setHistory(mock);
         applySnapshot(mock.snapshot);
         void api.setTrayOverride(mock.snapshot);

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   RateProfile,
   interpolate,
+  localMidnights,
   projectUsage,
+  straighten,
   trendSlope,
   type ForecastModel,
   type Gain,
@@ -219,6 +221,50 @@ describe("projectUsage", () => {
   it("never slopes downward, even with negative momentum", () => {
     const proj = projectUsage(0, DAY, 42, model({ momentum: -10 / HOUR }));
     expect(proj.every((p) => p.pct === 42)).toBe(true);
+  });
+});
+
+describe("straighten", () => {
+  const weekdays = (ms: number) => {
+    const d = new Date(ms).getDay();
+    return d !== 0 && d !== 6;
+  };
+  const steady = (ratePerDay: number) => RateProfile.from(steadyGains(ratePerDay / 24));
+
+  it("keeps the start, the knots, and the end, each on the original line", () => {
+    const fine = projectUsage(
+      monday,
+      monday + 7 * DAY,
+      0,
+      model({ momentum: 5 / HOUR, momentumTauMs: HOUR, profile: steady(10), isWorkDay: weekdays }),
+    );
+    const out = straighten(fine, localMidnights(monday, monday + 7 * DAY));
+    expect(out.map((p) => p.ms)).toEqual([0, 1, 2, 3, 4, 5, 6, 7].map((d) => monday + d * DAY));
+    for (const p of out) expect(p.pct).toBeCloseTo(interpolate(fine, p.ms)!);
+    expect(last(out)).toEqual(last(fine));
+  });
+
+  it("with no knots is one straight run to the end", () => {
+    const fine = projectUsage(monday, monday + 5 * HOUR, 20, model({ profile: steady(24) }));
+    expect(straighten(fine, [])).toEqual([fine[0], last(fine)]);
+  });
+
+  it("bends at the 100% crossing and drops knots beyond it", () => {
+    const fine = projectUsage(monday, monday + 7 * DAY, 80, model({ profile: steady(40) }));
+    const out = straighten(fine, localMidnights(monday, monday + 7 * DAY));
+    const hit = fine.find((p) => p.pct >= 100)!;
+    expect(out).toEqual([fine[0], hit, last(fine)]);
+  });
+
+  it("passes short polylines through", () => {
+    expect(straighten([pt(0, 5)], [1])).toEqual([pt(0, 5)]);
+  });
+});
+
+describe("localMidnights", () => {
+  it("lists the midnights strictly inside the range", () => {
+    expect(localMidnights(monday, monday + 3 * DAY)).toEqual([monday + DAY, monday + 2 * DAY]);
+    expect(localMidnights(monday + HOUR, monday + 23 * HOUR)).toEqual([]);
   });
 });
 

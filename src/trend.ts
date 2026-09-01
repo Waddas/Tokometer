@@ -181,6 +181,37 @@ export function projectUsage(now: number, end: number, cur: number, model: Forec
   return proj;
 }
 
+/**
+ * Reduce a projection to the vertices a reader needs: its start, the given
+ * knots (say, local midnights, where the work-day mask changes the slope),
+ * the moment it reaches 100%, and its end. Every kept vertex sits exactly on
+ * the original line, so the endpoint and the limit crossing are unchanged;
+ * only the smooth intermediate shape, an expected value that never looks
+ * like real bursty usage, is dropped in favour of straight segments.
+ */
+export function straighten(proj: Pt[], knots: number[]): Pt[] {
+  if (proj.length < 2) return proj;
+  const start = proj[0];
+  const end = proj[proj.length - 1];
+  const hit = start.pct < 100 ? proj.find((p) => p.pct >= 100) : undefined;
+  const cutoff = hit ? hit.ms : end.ms;
+  const out: Pt[] = [start];
+  for (const k of [...knots].sort((a, b) => a - b)) {
+    if (k <= start.ms || k >= cutoff) continue;
+    out.push({ ms: k, pct: interpolate(proj, k)! });
+  }
+  if (hit) out.push(hit);
+  if (out[out.length - 1].ms < end.ms) out.push(end);
+  return out;
+}
+
+/** Local midnights strictly between `from` and `to`. */
+export function localMidnights(from: number, to: number): number[] {
+  const out: number[] = [];
+  for (let t = nextLocalMidnight(from); t < to; t = nextLocalMidnight(t)) out.push(t);
+  return out;
+}
+
 /** Linear interpolation along a polyline, null outside its time range. */
 export function interpolate(pts: Pt[], t: number): number | null {
   if (pts.length === 0 || t < pts[0].ms || t > pts[pts.length - 1].ms) return null;
@@ -193,6 +224,14 @@ export function interpolate(pts: Pt[], t: number): number | null {
     }
   }
   return pts[pts.length - 1].pct;
+}
+
+/** First local midnight strictly after `ms`. */
+function nextLocalMidnight(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(24, 0, 0, 0);
+  const next = d.getTime();
+  return next > ms ? next : ms + 24 * HOUR_MS;
 }
 
 /** First local hour boundary strictly after `ms`. */
