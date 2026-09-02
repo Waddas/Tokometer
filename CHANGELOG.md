@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0](https://github.com/Waddas/Tokometer/compare/v1.3.0...v1.4.0) (2026-09-02)
+
+
+### Features
+
+* check for updates without installing, then offer the release ([#19](https://github.com/Waddas/Tokometer/issues/19)) ([641b8a5](https://github.com/Waddas/Tokometer/commit/641b8a581215112f51cd476ee554cec8d7b1e5b8))
+* learned usage forecast behind a beta toggle ([#18](https://github.com/Waddas/Tokometer/issues/18)) ([23c3c43](https://github.com/Waddas/Tokometer/commit/23c3c437f08ac4b6219617e547bf3c2ee05fb45f))
+* settings update card with ring animation, release notes and download progress ([#21](https://github.com/Waddas/Tokometer/issues/21)) ([c590f10](https://github.com/Waddas/Tokometer/commit/c590f1001b7df9ee4c72eb2631b13f9f83cbac37))
+
 ## [1.3.0](https://github.com/Waddas/Tokometer/compare/v1.2.2...v1.3.0) (2026-07-29)
 
 
