@@ -13,8 +13,9 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 /// settle before the network request goes out.
 const STARTUP_DELAY: Duration = Duration::from_secs(10);
 
-/// Version the dev override advertises (see `set_override`).
+/// Version and notes the dev override advertises (see `set_override`).
 const MOCK_VERSION: &str = "9.9.9";
+const MOCK_NOTES: &str = "### Features\n\n* a mock release, for previewing the update card ([#0](x)) ([0000000](x))\n* **widget:** nothing real changed\n\n### Bug Fixes\n\n* nothing real was fixed either\n";
 
 /// Where the updater is; mirrored to the frontend as `update://state` and
 /// `UpdatePhase` in api.ts. `UpToDate` and `Failed` are the results of a
@@ -26,9 +27,11 @@ pub enum UpdatePhase {
     Idle,
     Checking,
     /// `dismissed`: the user hid this release's dots; it stays installable.
+    /// `notes`: the release's changelog entry (markdown), empty if none.
     Available {
         version: String,
         dismissed: bool,
+        notes: String,
     },
     Installing {
         version: String,
@@ -99,7 +102,7 @@ fn set_phase(app: &AppHandle, phase: UpdatePhase, pending: Option<Update>) {
 }
 
 /// `Available` for `version`, honouring an earlier dismissal of that release.
-fn available(app: &AppHandle, version: String) -> UpdatePhase {
+fn available(app: &AppHandle, version: String, notes: String) -> UpdatePhase {
     let dismissed = app
         .state::<crate::state::AppState>()
         .0
@@ -108,7 +111,11 @@ fn available(app: &AppHandle, version: String) -> UpdatePhase {
         .dismissed_update
         .as_deref()
         == Some(version.as_str());
-    UpdatePhase::Available { version, dismissed }
+    UpdatePhase::Available {
+        version,
+        dismissed,
+        notes,
+    }
 }
 
 /// Run one silent check shortly after launch. Only an available release
@@ -138,7 +145,7 @@ pub fn spawn_install(app: AppHandle) {
 
 /// Hide the offered release's dots until a newer release appears.
 pub fn dismiss(app: &AppHandle) {
-    let UpdatePhase::Available { version, .. } = phase(app) else {
+    let UpdatePhase::Available { version, notes, .. } = phase(app) else {
         return;
     };
     let pending = app.state::<UpdateState>().0.lock().unwrap().pending.clone();
@@ -153,6 +160,7 @@ pub fn dismiss(app: &AppHandle) {
         UpdatePhase::Available {
             version,
             dismissed: true,
+            notes,
         },
         pending,
     );
@@ -175,6 +183,7 @@ pub fn set_override(app: &AppHandle, available: bool) {
         UpdatePhase::Available {
             version: MOCK_VERSION.into(),
             dismissed: false,
+            notes: MOCK_NOTES.into(),
         }
     } else {
         UpdatePhase::Idle
@@ -210,7 +219,8 @@ async fn check(app: AppHandle, manual: bool) {
     };
     match updater.check().await {
         Ok(Some(update)) => {
-            let phase = available(&app, update.version.clone());
+            let notes = update.body.clone().unwrap_or_default();
+            let phase = available(&app, update.version.clone(), notes);
             set_phase(&app, phase, Some(update));
         }
         Ok(None) => {
@@ -259,7 +269,31 @@ async fn install(app: AppHandle) {
         None,
     );
     set_status(&app, "Downloading update…");
-    match update.download_and_install(|_, _| {}, || {}).await {
+    // Progress goes out as a fraction whenever the whole percentage moves, so
+    // the settings card can draw the download without a flood of events.
+    let mut downloaded = 0u64;
+    let mut last_percent = u64::MAX;
+    let on_chunk = {
+        let app = app.clone();
+        move |chunk: usize, total: Option<u64>| {
+            downloaded += chunk as u64;
+            let Some(total) = total.filter(|t| *t > 0) else {
+                return;
+            };
+            let percent = downloaded * 100 / total;
+            if percent != last_percent {
+                last_percent = percent;
+                let _ = app.emit("update://progress", downloaded as f64 / total as f64);
+            }
+        }
+    };
+    let on_finish = {
+        let app = app.clone();
+        move || {
+            let _ = app.emit("update://progress", 1.0);
+        }
+    };
+    match update.download_and_install(on_chunk, on_finish).await {
         Ok(()) => {
             // Persist before the installer relaunches us; restart() never returns.
             crate::state::save(&app);

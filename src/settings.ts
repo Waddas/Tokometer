@@ -6,6 +6,7 @@ import "./settings.css";
 import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./api";
+import { parseReleaseNotes } from "./release-notes";
 
 const LAYOUTS: [api.Layout, string][] = [
   ["mascot-left", "Display left"],
@@ -187,54 +188,138 @@ void api.onUsage((s) => {
   renderLimits();
 });
 void api.getAutostart().then((on) => (autostartBox.checked = on));
-void getVersion().then((v) => {
-  document.getElementById("version")!.textContent = `Tokometer ${v}`;
-});
 
-/* ---- updates: the button checks, then offers the release a check found ---- */
+/* ---- updates: the card's ring, title and button follow the phase; the
+ * release notes and the dismiss link appear with an offered release, and the
+ * ring draws the download while one installs ---- */
+const updateCard = document.getElementById("update")!;
+const updateTitle = document.getElementById("update-title")!;
+const updateHint = document.getElementById("update-hint")!;
+const updatePct = document.getElementById("update-pct")!;
+const updateNotes = document.getElementById("update-notes")!;
 const updateBtn = document.getElementById("update-btn") as HTMLButtonElement;
 const updateDismiss = document.getElementById("update-dismiss")!;
-const updateHint = document.getElementById("update-hint")!;
-let updateAvailable = false;
+let appVersion = "";
+let updatePhase: api.UpdatePhase = { phase: "idle" };
+/** Download fraction of the installing release; null until the first chunk. */
+let updateProgress: number | null = null;
+
+void getVersion().then((v) => {
+  appVersion = v;
+  renderUpdate();
+});
 
 updateBtn.addEventListener("click", () => {
-  void (updateAvailable ? api.installUpdate() : api.checkForUpdates());
+  void (updatePhase.phase === "available" ? api.installUpdate() : api.checkForUpdates());
 });
 updateDismiss.addEventListener("click", () => void api.dismissUpdate());
 
-function updateLabel(u: api.UpdatePhase): string {
+function updateCopy(): [title: string, hint: string, button: string] {
+  const u = updatePhase;
   switch (u.phase) {
     case "checking":
-      return "Checking…";
+      return ["Checking for updates…", "", "Checking…"];
     case "available":
-      return `Update to ${u.version}`;
+      return [`Version ${u.version} is ready`, "Downloads, installs and relaunches.", "Update now"];
     case "installing":
-      return `Installing ${u.version}…`;
-    default:
-      return "Check for updates";
-  }
-}
-
-function updateNote(u: api.UpdatePhase): string {
-  switch (u.phase) {
-    case "available":
-      return "Downloads, installs and relaunches.";
+      return [
+        updateProgress !== null && updateProgress >= 1
+          ? `Installing ${u.version}…`
+          : `Downloading ${u.version}…`,
+        "Tokometer relaunches when it's done.",
+        "Updating…",
+      ];
     case "up-to-date":
-      return "You're on the latest version.";
+      return ["You're up to date", `Tokometer ${appVersion} is the latest release.`, "Check again"];
     case "failed":
-      return u.reason;
+      return [`Tokometer ${appVersion}`, u.reason, "Try again"];
     default:
-      return "";
+      return [`Tokometer ${appVersion}`, "", "Check for updates"];
   }
 }
 
-void api.onUpdatePhase((u) => {
-  updateAvailable = u.phase === "available";
+function renderNotes(markdown: string) {
+  const groups = parseReleaseNotes(markdown);
+  updateNotes.replaceChildren();
+  updateNotes.hidden = groups.length === 0;
+  for (const group of groups) {
+    if (group.heading) {
+      const heading = document.createElement("h3");
+      heading.textContent = group.heading;
+      updateNotes.appendChild(heading);
+    }
+    const list = document.createElement("ul");
+    for (const item of group.items) {
+      const li = document.createElement("li");
+      li.textContent = item;
+      list.appendChild(li);
+    }
+    updateNotes.appendChild(list);
+  }
+}
+
+function renderUpdate() {
+  const u = updatePhase;
+  const progress = updateProgress;
+  const [title, hint, button] = updateCopy();
+  const downloading = u.phase === "installing" && progress !== null && progress < 1;
+  updateCard.dataset.phase = u.phase;
+  updateCard.classList.toggle("downloading", downloading);
+  updateCard.style.setProperty("--progress", downloading ? String(progress) : "0");
+  updatePct.textContent = downloading ? `${Math.round(progress * 100)}%` : "";
+  updateTitle.textContent = title;
+  updateHint.textContent = hint;
+  updateHint.hidden = hint === "";
+  updateBtn.textContent = button;
   updateBtn.disabled = u.phase === "checking" || u.phase === "installing";
-  updateBtn.classList.toggle("selected", updateAvailable);
-  updateBtn.textContent = updateLabel(u);
+  updateBtn.classList.toggle("primary", u.phase === "available");
   updateDismiss.hidden = !(u.phase === "available" && !u.dismissed);
-  const note = updateNote(u);
-  updateHint.textContent = note;
-  updateHint.hidden = note === "";
+}
+
+function setUpdatePhase(u: api.UpdatePhase) {
+  updatePhase = u;
+  updateProgress = null;
+  renderNotes(u.phase === "available" ? u.notes : "");
+  renderUpdate();
+}
+
+void api.onUpdatePhase(setUpdatePhase);
+void api.onUpdateProgress((fraction) => {
+  updateProgress = fraction;
+  renderUpdate();
 });
+
+/* ---- dev: P steps the card through every phase locally, with a simulated
+ * download, so each state can be seen without a real release. A real phase
+ * event takes over again whenever the backend emits one. ---- */
+if (import.meta.env.DEV) {
+  const PREVIEW: api.UpdatePhase[] = [
+    { phase: "checking" },
+    {
+      phase: "available",
+      version: "9.9.9",
+      dismissed: false,
+      notes: "### Features\n\n* a mock release, for previewing the update card\n* **widget:** nothing real changed\n\n### Bug Fixes\n\n* nothing real was fixed either",
+    },
+    { phase: "installing", version: "9.9.9" },
+    { phase: "up-to-date" },
+    { phase: "failed", reason: "Update check failed" },
+    { phase: "idle" },
+  ];
+  let step = -1;
+  let download: ReturnType<typeof setInterval> | undefined;
+  window.addEventListener("keydown", (e) => {
+    if (e.repeat || e.key.toLowerCase() !== "p") return;
+    clearInterval(download);
+    step = (step + 1) % PREVIEW.length;
+    setUpdatePhase(PREVIEW[step]);
+    if (PREVIEW[step].phase !== "installing") return;
+    let fraction = 0;
+    download = setInterval(() => {
+      fraction = Math.min(1, fraction + 0.02);
+      updateProgress = fraction;
+      renderUpdate();
+      if (fraction >= 1) clearInterval(download);
+    }, 60);
+  });
+}

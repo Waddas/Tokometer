@@ -24,6 +24,7 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      body: ${{ steps.release.outputs.body }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -95,4 +96,7 @@ jobs:
           # On a release run: upload installers to the release-please release.
           # On manual dispatch: tag_name is empty -> tauri-action only builds.
           tagName: ${{ needs.release-please.outputs.tag_name }}
+          # The changelog entry becomes latest.json's `notes`, which the
+          # settings window shows alongside the offered release.
+          releaseBody: ${{ needs.release-please.outputs.body }}
           args: ${{ matrix.args }}
