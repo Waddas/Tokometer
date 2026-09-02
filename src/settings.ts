@@ -176,3 +176,51 @@ void api.getAutostart().then((on) => (autostartBox.checked = on));
 void getVersion().then((v) => {
   document.getElementById("version")!.textContent = `Tokometer ${v}`;
 });
+
+/* ---- updates: the button checks, then offers the release a check found ---- */
+const updateBtn = document.getElementById("update-btn") as HTMLButtonElement;
+const updateDismiss = document.getElementById("update-dismiss")!;
+const updateHint = document.getElementById("update-hint")!;
+let updateAvailable = false;
+
+updateBtn.addEventListener("click", () => {
+  void (updateAvailable ? api.installUpdate() : api.checkForUpdates());
+});
+updateDismiss.addEventListener("click", () => void api.dismissUpdate());
+
+function updateLabel(u: api.UpdatePhase): string {
+  switch (u.phase) {
+    case "checking":
+      return "Checking…";
+    case "available":
+      return `Update to ${u.version}`;
+    case "installing":
+      return `Installing ${u.version}…`;
+    default:
+      return "Check for updates";
+  }
+}
+
+function updateNote(u: api.UpdatePhase): string {
+  switch (u.phase) {
+    case "available":
+      return "Downloads, installs and relaunches.";
+    case "up-to-date":
+      return "You're on the latest version.";
+    case "failed":
+      return u.reason;
+    default:
+      return "";
+  }
+}
+
+void api.onUpdatePhase((u) => {
+  updateAvailable = u.phase === "available";
+  updateBtn.disabled = u.phase === "checking" || u.phase === "installing";
+  updateBtn.classList.toggle("selected", updateAvailable);
+  updateBtn.textContent = updateLabel(u);
+  updateDismiss.hidden = !(u.phase === "available" && !u.dismissed);
+  const note = updateNote(u);
+  updateHint.textContent = note;
+  updateHint.hidden = note === "";
+});

@@ -74,6 +74,70 @@ fn tint(img: Image<'_>, ink: u8) -> Image<'static> {
 }
 
 // ---------------------------------------------------------------------------
+// Update-available badge
+// ---------------------------------------------------------------------------
+
+/// Widget accent (`--accent` in styles.css). Template icons lose it to the
+/// menubar tint, where the dot still reads by shape.
+const BADGE_COLOR: (u8, u8, u8) = (217, 119, 87);
+
+/// A dot beside the icon's top-right, in a strip added to the canvas so it
+/// never overlaps the ring or the text. Menubars scale to height, so the
+/// extra width costs nothing.
+pub fn badge(img: Image<'_>) -> Image<'static> {
+    let (w, h) = (img.width() as usize, img.height() as usize);
+    let radius = (h as f32 * 0.14).max(2.0);
+    let gap = (radius * 0.1).round() as usize;
+    let strip = gap + (radius * 2.0).ceil() as usize;
+    let new_w = w + strip;
+    let (cx, cy) = (new_w as f32 - radius, radius);
+    let src = img.rgba();
+    let mut rgba = vec![0u8; new_w * h * 4];
+    for y in 0..h {
+        rgba[y * new_w * 4..(y * new_w + w) * 4].copy_from_slice(&src[y * w * 4..(y + 1) * w * 4]);
+        for x in w..new_w {
+            let dx = x as f32 + 0.5 - cx;
+            let dy = y as f32 + 0.5 - cy;
+            let dot = (radius - (dx * dx + dy * dy).sqrt() + 0.5).clamp(0.0, 1.0);
+            let i = (y * new_w + x) * 4;
+            rgba[i] = BADGE_COLOR.0;
+            rgba[i + 1] = BADGE_COLOR.1;
+            rgba[i + 2] = BADGE_COLOR.2;
+            rgba[i + 3] = (dot * 255.0).round() as u8;
+        }
+    }
+    Image::new_owned(rgba, new_w as u32, h as u32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pixel<'a>(img: &'a Image<'_>, x: u32, y: u32) -> &'a [u8] {
+        let i = ((y * img.width() + x) * 4) as usize;
+        &img.rgba()[i..i + 4]
+    }
+
+    #[test]
+    fn badge_adds_a_dot_beside_an_untouched_icon() {
+        let full = gauge(100.0);
+        let badged = badge(full.clone());
+        let s = GAUGE_PX as u32;
+        assert_eq!(badged.height(), s);
+        assert!(badged.width() > s);
+        // The original pixels are copied verbatim.
+        for (x, y) in [(s / 2, 4), (s - 4, s / 2), (4, s / 2)] {
+            assert_eq!(pixel(&badged, x, y), pixel(&full, x, y));
+        }
+        // The dot sits in the added strip: opaque accent at its centre,
+        // nothing below it.
+        let r = (s as f32 * 0.14) as u32;
+        assert_eq!(pixel(&badged, badged.width() - r, r), &[217, 119, 87, 255]);
+        assert_eq!(pixel(&badged, badged.width() - r, s - r)[3], 0);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Colour-coded progress ring
 // ---------------------------------------------------------------------------
 
