@@ -4,7 +4,7 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::history::{HistoryLog, RawSample, Sample};
 use crate::poller::RefreshSignal;
-use crate::state::{AppState, Layout, Mascot, Size, TrayStyle};
+use crate::state::{AppState, BetaFeatures, Layout, Mascot, Size, TrayStyle};
 
 #[tauri::command]
 pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
@@ -19,6 +19,7 @@ pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
         "workDays": s.work_days,
         "probeFallback": s.probe_fallback,
         "hiddenLimits": s.hidden_limits,
+        "beta": s.beta,
         "lastUsage": s.last_usage,
     })
 }
@@ -81,6 +82,13 @@ pub fn set_hidden_limits(app: AppHandle, ids: Vec<String>) {
 #[tauri::command]
 pub fn set_probe_fallback(app: AppHandle, enabled: bool) {
     app.state::<AppState>().0.lock().unwrap().probe_fallback = enabled;
+    crate::state::save(&app);
+    crate::tray::emit_state(&app);
+}
+
+#[tauri::command]
+pub fn set_beta(app: AppHandle, beta: BetaFeatures) {
+    app.state::<AppState>().0.lock().unwrap().beta = beta;
     crate::state::save(&app);
     crate::tray::emit_state(&app);
 }

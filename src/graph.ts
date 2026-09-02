@@ -1,27 +1,52 @@
 // Usage-over-time graph, shown in place of the mascot: history line coloured
-// by the usage thresholds, a dotted prediction at the current rate, a red bar
-// at the limit, and a faint ghost of the previous window. Right-clicking it
-// switches between the 5-hour and 7-day windows; hovering reads off the time
-// and percentage under the cursor.
+// by the usage thresholds, a dotted prediction, a red bar at the limit, and a
+// faint ghost of the previous window. The prediction extends the recent rate;
+// with the learned-forecast beta on it follows that momentum first and the
+// user's learned hour-of-week usage pattern after that.
+// Right-clicking switches between the 5-hour and 7-day windows; hovering reads
+// off the time and percentage under the cursor.
 import { SESSION_ID, WEEKLY_ALL_ID, type UsageSnapshot } from "./api";
 import type { UsageHistory } from "./history";
 import { AMBER_AT_PCT, RED_AT_PCT } from "./thresholds";
-import { trendSlope, projectUsage, type Pt } from "./trend";
+import {
+  RateProfile,
+  localMidnights,
+  projectUsage,
+  straighten,
+  trendSlope,
+  type Pt,
+} from "./trend";
 
 type Mode = "session" | "weekly";
 
 // `key` is the window id the snapshot and the history log are keyed by.
+// `trendMs` is the span the momentum slope is fitted over; `tauMs` how long
+// the forecast keeps following that momentum before deferring to the profile.
 const MODE = {
-  session: { key: SESSION_ID, windowMs: 5 * 3_600_000, trendMs: 30 * 60_000, label: "5h" },
-  weekly: { key: WEEKLY_ALL_ID, windowMs: 7 * 86_400_000, trendMs: 6 * 3_600_000, label: "7d" },
+  session: {
+    key: SESSION_ID,
+    windowMs: 5 * 3_600_000,
+    trendMs: 30 * 60_000,
+    tauMs: 30 * 60_000,
+    label: "5h",
+  },
+  weekly: {
+    key: WEEKLY_ALL_ID,
+    windowMs: 7 * 86_400_000,
+    trendMs: 6 * 3_600_000,
+    tauMs: 2 * 3_600_000,
+    label: "7d",
+  },
 } as const;
 
 const MODE_KEY = "graph-mode";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// With the learned forecast off, nothing is known beyond the recent rate.
+const NO_PROFILE = new RateProfile();
 
 /** What the graph reads its samples from; UsageHistory or a dev mock. */
-export type GraphSource = Pick<UsageHistory, "points" | "previousWindow">;
+export type GraphSource = Pick<UsageHistory, "points" | "previousWindow" | "rateProfile">;
 
 const PAD = 8; // px at design size; rendered damped by --chrome
 // Ghosts of windows that never got going are clutter, not comparison.
@@ -46,8 +71,10 @@ function chromeScale(): number {
 export class UsageGraph {
   private mode: Mode;
   private snapshot: UsageSnapshot | null = null;
-  // Weekdays the 7-day prediction ramps, indexed Sun..Sat; all-on until set.
+  // Weekdays the 7-day prediction may ramp on, indexed Sun..Sat; all-on until set.
   private workDays: boolean[] = [true, true, true, true, true, true, true];
+  /** Beta: forecast from the learned profile rather than the recent rate alone. */
+  private learnedForecast = false;
   /** Cursor x in canvas px while hovering, null otherwise. */
   private hoverX: number | null = null;
   /** The --chrome factor, refreshed at the top of each draw. */
@@ -107,6 +134,12 @@ export class UsageGraph {
   /** Set which weekdays (Sun..Sat) the 7-day prediction ramps across. */
   setWorkDays(days: boolean[]): void {
     if (days.length === 7) this.workDays = days;
+    this.draw();
+  }
+
+  /** Switch the prediction between the recent rate and the learned profile. */
+  setLearnedForecast(on: boolean): void {
+    this.learnedForecast = on;
     this.draw();
   }
 
@@ -237,16 +270,26 @@ export class UsageGraph {
     this.strokePolyline(ctx, pts, gradient, x, y);
 
     let proj: Pt[] | null = null;
-    const slope = trendSlope(pts, cfg.trendMs, now);
-    if (win.resetAt && slope !== null && now < end) {
-      const rise = Math.max(0, slope);
+    const momentum = trendSlope(pts, cfg.trendMs, now);
+    // Off, the momentum never decays and there is no profile to hand over to,
+    // so the line is a constant-rate extrapolation of the recent slope.
+    const profile = this.learnedForecast ? this.history.rateProfile(cfg.key) : NO_PROFILE;
+    if (win.resetAt && now < end && (momentum !== null || profile.hasData)) {
       // The work-day mask only shapes the weekly window; the 5h projection is
-      // intra-day, so it always ramps.
+      // intra-day, so it never holds flat for a weekend.
       const isWorkDay =
         this.mode === "weekly"
           ? (ms: number) => this.workDays[new Date(ms).getDay()] !== false
           : () => true;
-      proj = projectUsage(now, end, win.utilization, rise, isWorkDay);
+      const fine = projectUsage(now, end, win.utilization, {
+        momentum,
+        momentumTauMs: this.learnedForecast ? cfg.tauMs : Infinity,
+        profile,
+        isWorkDay,
+      });
+      // Straight segments: one per day on the weekly view (the mask bends the
+      // line at midnight), a single run to the limit or the reset on the 5h.
+      proj = straighten(fine, this.mode === "weekly" ? localMidnights(now, end) : []);
       ctx.setLineDash([c, 6 * c]);
       this.strokePolyline(ctx, proj, gradient, x, y);
       ctx.setLineDash([]);

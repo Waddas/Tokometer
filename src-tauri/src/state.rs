@@ -185,6 +185,17 @@ pub fn all_work_days() -> [bool; 7] {
     [true; 7]
 }
 
+/// Opt-in previews of unfinished features (Settings → Beta features). Every
+/// flag defaults to off, and turning one off restores the previous behaviour;
+/// none of them changes what gets recorded, so nothing is lost either way.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct BetaFeatures {
+    /// Forecast from the learned hour-of-week usage profile plus decaying
+    /// momentum, instead of extrapolating the recent rate.
+    pub learned_forecast: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PersistedState {
@@ -207,6 +218,8 @@ pub struct PersistedState {
     /// kept, so a limit that comes back stays hidden.
     #[serde(default)]
     pub hidden_limits: Vec<String>,
+    #[serde(default)]
+    pub beta: BetaFeatures,
     /// Release whose update-available dots the user hid; a newer release
     /// shows them again.
     #[serde(default)]
@@ -238,6 +251,7 @@ impl Default for PersistedState {
             work_days: all_work_days(),
             probe_fallback: true,
             hidden_limits: Vec::new(),
+            beta: BetaFeatures::default(),
             dismissed_update: None,
             last_usage: None,
         }
@@ -471,6 +485,9 @@ mod tests {
         assert!(s.probe_fallback);
         // New limits are visible until the user hides them.
         assert!(s.hidden_limits.is_empty());
+        // Beta features are opt-in.
+        assert_eq!(s.beta, BetaFeatures::default());
+        assert!(!s.beta.learned_forecast);
         assert!(s.last_usage.is_none());
     }
 
@@ -487,12 +504,16 @@ mod tests {
             work_days: [true, false, true, true, true, true, false],
             probe_fallback: true,
             hidden_limits: vec!["weekly_scoped:fable".into()],
+            beta: BetaFeatures {
+                learned_forecast: true,
+            },
             dismissed_update: Some("1.4.0".into()),
             last_usage: None,
         };
         let json = serde_json::to_string(&original).unwrap();
         let back: PersistedState = serde_json::from_str(&json).unwrap();
         assert_eq!(back.hidden_limits, original.hidden_limits);
+        assert_eq!(back.beta, original.beta);
         assert_eq!(back.dismissed_update, original.dismissed_update);
         assert_eq!(back.pin, original.pin);
         assert_eq!(back.layout, original.layout);
@@ -514,5 +535,6 @@ mod tests {
         let v = serde_json::to_value(&s).unwrap();
         assert!(v.get("lastUsage").is_some());
         assert!(v.get("hiddenLimits").is_some());
+        assert!(v["beta"].get("learnedForecast").is_some());
     }
 }

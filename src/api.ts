@@ -56,6 +56,12 @@ export type Size = "small" | "medium" | "large";
 /** Mirrors the Rust `TrayStyle` enum (state.rs). */
 export type TrayStyle = "ring" | "text";
 
+/** Opt-in feature previews; mirrors the Rust `BetaFeatures` (state.rs). */
+export interface BetaFeatures {
+  /** Forecast from the learned hour-of-week profile instead of the recent rate. */
+  learnedForecast: boolean;
+}
+
 /** The persisted preferences, as get_state and state://change report them. */
 export interface Preferences {
   pin: boolean;
@@ -71,6 +77,7 @@ export interface Preferences {
   probeFallback: boolean;
   /** Ids of limit windows the user hid; they get no tile. */
   hiddenLimits: string[];
+  beta: BetaFeatures;
 }
 
 export interface AppStateSnapshot extends Preferences {
@@ -92,6 +99,7 @@ export const setWorkDays = (days: boolean[]) => invoke<void>("set_work_days", { 
 export const setHiddenLimits = (ids: string[]) => invoke<void>("set_hidden_limits", { ids });
 export const setProbeFallback = (enabled: boolean) =>
   invoke<void>("set_probe_fallback", { enabled });
+export const setBeta = (beta: BetaFeatures) => invoke<void>("set_beta", { beta });
 /** Size the widget for a logical width, height locked to the layout's aspect
  * ratio; `commit` persists the resulting free-resize scale. */
 export const resizeWidget = (width: number, commit: boolean) =>

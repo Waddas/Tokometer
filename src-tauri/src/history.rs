@@ -71,7 +71,9 @@ impl RawSample {
     }
 }
 
-const MAX_AGE_MS: i64 = 15 * 86_400_000; // current 7-day window plus the previous one
+// Keep several completed 7-day windows so the frontend can learn the user's
+// usual ramp. At the sparse 5-minute cadence this is still a small JSON file.
+const MAX_AGE_MS: i64 = 35 * 86_400_000;
 const DENSE_AGE_MS: i64 = 6 * 3_600_000; // keep every sample this recent...
 const SPARSE_GAP_MS: i64 = 5 * 60_000; // ...thin older ones to one per 5 min
 const MIN_GAP_MS: i64 = 30_000; // collapse bursts (manual refreshes, replays)

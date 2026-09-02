@@ -28,10 +28,12 @@
 - **A mascot that works when you do** — pixel-art animations speed up with
   your usage rate. Pick **Clawd**, an **Axolotl**, or a **Cat**.
 - **Usage graph with a forecast** — click the mascot to flip it into a
-  usage-over-time graph: gradient-coloured history, a dotted prediction at
-  your current pace, the limit ceiling, your reset time, and a faint ghost of
-  the previous window for comparison. Hover to read off the time and
-  percentage at any point.
+  usage-over-time graph: gradient-coloured history, a dotted prediction, the
+  limit ceiling, your reset time, and a faint ghost of the previous window
+  for comparison. Hover to read off the time and percentage at any point.
+  Opt in to the **learned usage forecast** (Settings → Beta features) and the
+  prediction follows your current pace first, then the usage pattern it has
+  learned for each hour of your week, so evenings and weekends flatten it out.
 - **Stays out of the way** — frameless, draggable, freely resizable from the
   corner grip, optionally pinned above the taskbar, hidden to the tray when
   you don't want it.
@@ -59,7 +61,7 @@
 | **Right-click** the graph | Switch between the 5-hour and 7-day windows |
 | **Right-click** the mascot | Pick a mascot (Clawd / Axolotl / Cat) |
 | **Hover** | Reveal pin-on-top, refresh, settings, and hide buttons |
-| **Settings window** (⚙ or tray) | Layout, size, mascot, tray icon, work days, pin, start at login |
+| **Settings window** (⚙ or tray) | Layout, size, mascot, tray icon, work days, pin, start at login, beta features |
 | **Tray menu** | Show/hide, settings, refresh, check for updates, quit |
 
 The tray icon doubles as a status light — its bubble turns green/amber/red
@@ -80,9 +82,14 @@ with your session usage, and the tooltip shows both live percentages.
 - **History** — the API only reports *current* utilization, so the app
   accumulates its own time series locally (`history.json` next to its config)
   to draw the graph: full resolution for recent hours, thinned to one sample
-  per five minutes beyond that, capped at 15 days — enough for each view to
-  show a ghost of its previous window. Each sample records its window's reset
-  time, so windows are compared by identity rather than wall-clock guesswork.
+  per five minutes beyond that, capped at 35 days. Each sample records its
+  window's reset time, so windows are compared by identity rather than
+  wall-clock guesswork. With the learned-forecast beta on, the same log
+  teaches the prediction: the usage gained between polls is averaged per hour
+  of the week (sparse hours borrowing from their day and time of day), and the
+  prediction line blends that profile with the momentum of the last few polls.
+  The profile is derived from the log on the fly, so toggling the beta off
+  and on loses nothing.
 - **Fallback probe** (on by default) — if the free usage endpoint fails,
   Tokometer cross-checks by sending a minimal 1-token `/v1/messages` request
   and reading the rate-limit headers. It only runs while the usage endpoint
