@@ -220,6 +220,10 @@ pub struct PersistedState {
     pub hidden_limits: Vec<String>,
     #[serde(default)]
     pub beta: BetaFeatures,
+    /// Release whose update-available dots the user hid; a newer release
+    /// shows them again.
+    #[serde(default)]
+    pub dismissed_update: Option<String>,
     pub last_usage: Option<UsageSnapshot>,
 }
 
@@ -248,6 +252,7 @@ impl Default for PersistedState {
             probe_fallback: true,
             hidden_limits: Vec::new(),
             beta: BetaFeatures::default(),
+            dismissed_update: None,
             last_usage: None,
         }
     }
@@ -502,12 +507,14 @@ mod tests {
             beta: BetaFeatures {
                 learned_forecast: true,
             },
+            dismissed_update: Some("1.4.0".into()),
             last_usage: None,
         };
         let json = serde_json::to_string(&original).unwrap();
         let back: PersistedState = serde_json::from_str(&json).unwrap();
         assert_eq!(back.hidden_limits, original.hidden_limits);
         assert_eq!(back.beta, original.beta);
+        assert_eq!(back.dismissed_update, original.dismissed_update);
         assert_eq!(back.pin, original.pin);
         assert_eq!(back.layout, original.layout);
         assert_eq!(back.size, original.size);

@@ -110,10 +110,18 @@ h2 {
   margin-left: 21px;
 }
 
+.update,
+.update .options {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
 .version {
   color: var(--dim);
   font-size: 11px;
-  text-align: center;
 }
 
 /* Chip-style checkboxes: work days, and one per detected usage limit. */

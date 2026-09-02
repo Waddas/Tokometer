@@ -71,7 +71,14 @@
         </p>
       </section>
 
-      <p class="version" id="version"></p>
+      <div class="update">
+        <p class="version" id="version"></p>
+        <div class="options">
+          <button id="update-btn">Check for updates</button>
+          <button id="update-dismiss" hidden>Hide the update dot</button>
+        </div>
+        <p class="hint" id="update-hint" hidden></p>
+      </div>
     </main>
     <script type="module" src="/src/settings.ts"></script>
   </body>

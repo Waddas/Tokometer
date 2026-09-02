@@ -156,6 +156,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(poller::RefreshSignal(Arc::new(Notify::new())))
         .manage(tray::DevOverride(Mutex::new(None)))
+        .manage(update::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::refresh_now,
@@ -174,6 +175,11 @@ pub fn run() {
             commands::get_history,
             commands::import_history,
             commands::set_tray_override,
+            commands::get_update_phase,
+            commands::check_for_updates,
+            commands::install_update,
+            commands::dismiss_update,
+            commands::set_update_override,
             commands::get_autostart,
             commands::set_autostart,
         ])
