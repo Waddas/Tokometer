@@ -119,8 +119,9 @@ export const importHistory = (samples: HistorySample[]) =>
 export type UpdatePhase =
   | { phase: "idle" }
   | { phase: "checking" }
-  /** `dismissed`: the user hid this release's dots; it stays installable. */
-  | { phase: "available"; version: string; dismissed: boolean }
+  /** `dismissed`: the user hid this release's dots; it stays installable.
+   * `notes`: the release's changelog entry (markdown), empty if it has none. */
+  | { phase: "available"; version: string; dismissed: boolean; notes: string }
   | { phase: "installing"; version: string }
   | { phase: "up-to-date" }
   | { phase: "failed"; reason: string };
@@ -145,6 +146,11 @@ export const onUpdatePhase = (cb: (u: UpdatePhase) => void): Promise<UnlistenFn>
   void getUpdatePhase().then(cb);
   return listen<UpdatePhase>("update://state", (e) => cb(e.payload));
 };
+
+/** Download progress of an installing update, 0..1; 1 once the download is
+ * done and the installer is running. Silent when the size is unknown. */
+export const onUpdateProgress = (cb: (fraction: number) => void): Promise<UnlistenFn> =>
+  listen<number>("update://progress", (e) => cb(e.payload));
 
 export const onUsage = (cb: (s: UsageSnapshot) => void): Promise<UnlistenFn> =>
   listen<UsageSnapshot>("usage://update", (e) => cb(e.payload));

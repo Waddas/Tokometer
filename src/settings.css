@@ -10,6 +10,8 @@
   --text: #faf9f5;
   --dim: #b0aea5;
   --accent: #d97757;
+  --green: #788c5d;
+  --red: #c0392b;
   --track: #2a2a28;
 }
 
@@ -68,7 +70,8 @@ h2 {
   gap: 4px;
 }
 
-.options button {
+.options button,
+.actions button {
   border: 1px solid var(--track);
   border-radius: 6px;
   background: transparent;
@@ -79,9 +82,33 @@ h2 {
   cursor: pointer;
 }
 
-.options button:hover {
+.options button:hover,
+.actions button:hover:enabled {
   background: var(--track);
   color: var(--text);
+}
+
+.actions button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.actions .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.actions .primary:hover:enabled {
+  background: var(--accent);
+  color: var(--bg);
+  filter: brightness(1.12);
+}
+
+.actions .quiet {
+  border-color: transparent;
+  font-size: 11px;
+  padding: 3px 8px;
 }
 
 .options button.selected {
@@ -110,18 +137,223 @@ h2 {
   margin-left: 21px;
 }
 
-.update,
-.update .options {
-  display: flex;
-  flex-direction: column;
+/* ---- update card: a ring says where the updater is — a dash orbits while
+ * it checks, the ring fills as the download lands, a tick or cross closes a
+ * check — beside the version, the one action that fits, and the release
+ * notes once a release is offered. `data-phase` on the card drives it all;
+ * `--progress` (0..1) and `.downloading` come from the download. ---- */
+.update {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "ring text actions"
+    "notes notes notes";
   align-items: center;
-  gap: 6px;
-  text-align: center;
+  column-gap: 12px;
+  row-gap: 0;
+  transition: box-shadow 0.4s;
 }
 
-.version {
-  color: var(--dim);
+.update[data-phase="available"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.update .ring {
+  grid-area: ring;
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.update .ring svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.update .track {
+  stroke: var(--track);
+}
+
+/* pathLength="1" on every stroke, so a dash offset is a fraction drawn. */
+.update .arc {
+  stroke: var(--accent);
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition:
+    stroke-dasharray 0.5s ease,
+    stroke-dashoffset 0.5s ease,
+    opacity 0.15s,
+    stroke 0.3s;
+}
+
+/* Inactive glyphs also go transparent: a fully offset dash would still leave
+ * a round-capped dot where each subpath starts. */
+.update .glyph {
+  stroke: var(--dim);
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  opacity: 0;
+  transition:
+    stroke-dashoffset 0.35s ease,
+    opacity 0.15s,
+    stroke 0.3s;
+}
+
+.update .pct {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text);
+}
+
+/* idle: the empty ring and a dim arrow, waiting. The arc goes transparent
+ * for the same round-cap reason as the glyphs. */
+.update[data-phase="idle"] .arc {
+  opacity: 0;
+}
+.update[data-phase="idle"] .arrow {
+  stroke-dashoffset: 0;
+  opacity: 1;
+}
+
+/* checking, and installing once the download is in: a dash orbits */
+.update[data-phase="checking"] .arc,
+.update[data-phase="installing"] .arc {
+  stroke-dasharray: 0.25 0.75;
+  stroke-dashoffset: 0;
+  animation: orbit 1s linear infinite;
+}
+
+/* downloading: the ring is the progress bar */
+.update.downloading .arc {
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: calc(1 - var(--progress));
+  animation: none;
+  transition: stroke-dashoffset 0.25s linear;
+}
+
+/* available: the ring completes, the arrow lights up, the whole thing breathes */
+.update[data-phase="available"] .arc {
+  stroke-dashoffset: 0;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+.update[data-phase="available"] .arrow {
+  stroke: var(--accent);
+  stroke-dashoffset: 0;
+  opacity: 1;
+  transition-delay: 0.25s;
+}
+.update[data-phase="available"] .ring {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+/* up to date / failed: the outcome draws itself in */
+.update[data-phase="up-to-date"] .arc,
+.update[data-phase="up-to-date"] .tick {
+  stroke: var(--green);
+  stroke-dashoffset: 0;
+}
+.update[data-phase="failed"] .arc,
+.update[data-phase="failed"] .cross {
+  stroke: var(--red);
+  stroke-dashoffset: 0;
+}
+.update[data-phase="up-to-date"] .tick,
+.update[data-phase="failed"] .cross {
+  opacity: 1;
+  transition-delay: 0.3s;
+}
+
+@keyframes orbit {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes breathe {
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.update .text {
+  grid-area: text;
+  min-width: 0;
+}
+
+.update .title {
+  font-size: 13px;
+}
+
+/* Stacked and stretched, so a second action sits centred under the first. */
+.update .actions {
+  grid-area: actions;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.update .notes {
+  grid-area: notes;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--track);
+  max-height: 120px;
+  overflow-y: auto;
   font-size: 11px;
+  color: var(--dim);
+  animation: rise 0.35s ease;
+}
+
+.update .notes h3 {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text);
+  margin-top: 6px;
+}
+.update .notes h3:first-child {
+  margin-top: 0;
+}
+
+.update .notes ul {
+  list-style: none;
+}
+
+.update .notes li {
+  padding-left: 12px;
+  text-indent: -12px;
+}
+.update .notes li::before {
+  content: "•";
+  color: var(--accent);
+  display: inline-block;
+  width: 12px;
+  text-indent: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update .ring,
+  .update .arc,
+  .update .notes {
+    animation: none;
+  }
 }
 
 /* Chip-style checkboxes: work days, and one per detected usage limit. */
