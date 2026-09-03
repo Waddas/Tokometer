@@ -185,16 +185,15 @@ pub fn all_work_days() -> [bool; 7] {
     [true; 7]
 }
 
-/// Opt-in previews of unfinished features (Settings → Beta features). Every
-/// flag defaults to off, and turning one off restores the previous behaviour;
-/// none of them changes what gets recorded, so nothing is lost either way.
+/// Opt-in previews of unfinished features. Every flag defaults to off, and
+/// turning one off restores the previous behaviour. None are being trialled
+/// right now; to add one, declare a `bool` field here, mirror it in
+/// `BetaFeatures` (api.ts) and give it a checkbox in the settings window
+/// (`BETA_BOXES` in settings.ts). A flag retired from here is ignored when an
+/// older state.json still carries it, so removing a feature needs no migration.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct BetaFeatures {
-    /// Forecast from the learned hour-of-week usage profile plus decaying
-    /// momentum, instead of extrapolating the recent rate.
-    pub learned_forecast: bool,
-}
+pub struct BetaFeatures {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -485,10 +484,16 @@ mod tests {
         assert!(s.probe_fallback);
         // New limits are visible until the user hides them.
         assert!(s.hidden_limits.is_empty());
-        // Beta features are opt-in.
         assert_eq!(s.beta, BetaFeatures::default());
-        assert!(!s.beta.learned_forecast);
         assert!(s.last_usage.is_none());
+    }
+
+    #[test]
+    fn persisted_state_ignores_retired_beta_flags() {
+        // A state.json written while a since-removed beta feature was on.
+        let s: PersistedState =
+            serde_json::from_str(r#"{"beta":{"learnedForecast":true}}"#).unwrap();
+        assert_eq!(s.beta, BetaFeatures::default());
     }
 
     #[test]
@@ -504,9 +509,7 @@ mod tests {
             work_days: [true, false, true, true, true, true, false],
             probe_fallback: true,
             hidden_limits: vec!["weekly_scoped:fable".into()],
-            beta: BetaFeatures {
-                learned_forecast: true,
-            },
+            beta: BetaFeatures::default(),
             dismissed_update: Some("1.4.0".into()),
             last_usage: None,
         };
@@ -535,6 +538,6 @@ mod tests {
         let v = serde_json::to_value(&s).unwrap();
         assert!(v.get("lastUsage").is_some());
         assert!(v.get("hiddenLimits").is_some());
-        assert!(v["beta"].get("learnedForecast").is_some());
+        assert!(v.get("beta").is_some());
     }
 }

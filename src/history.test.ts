@@ -179,35 +179,3 @@ describe("previousWindow", () => {
     expect(prev.pts.map((p) => p.ms)).toEqual([1 * HOUR, 3 * HOUR]);
   });
 });
-
-describe("rateProfile", () => {
-  const HOUR = 60 * MIN;
-  const sec = (ms: number) => ms / 1000;
-  // Monday 10:00 local, so every poll below lands in one hour-of-week bucket
-  // and the profile's rate there is just total gain over total time.
-  const t0 = new Date(2026, 0, 5, 10).getTime();
-
-  it("learns from gains within a window, restarts at a rollover, ignores a lapse", () => {
-    const h = new UsageHistory();
-    h.sample(snapshot(t0, 10, null, sec(t0 + HOUR)), t0);
-    h.sample(snapshot(t0 + 30 * MIN, 30, null, sec(t0 + HOUR)), t0 + 30 * MIN); // +20
-    h.sample(snapshot(t0 + 45 * MIN, 5, null, sec(t0 + 6 * HOUR)), t0 + 45 * MIN); // new window: +5
-    h.sample(snapshot(t0 + 60 * MIN, 0, null, null), t0 + 60 * MIN); // lapsed: nothing
-    expect(h.rateProfile(SESSION_ID).rateAt(t0) * HOUR).toBeCloseTo(25);
-  });
-
-  it("rebuilds after new samples arrive", () => {
-    const h = new UsageHistory();
-    h.sample(snapshot(t0, 10, null, sec(t0 + HOUR)), t0);
-    h.sample(snapshot(t0 + 30 * MIN, 20, null, sec(t0 + HOUR)), t0 + 30 * MIN);
-    const before = h.rateProfile(SESSION_ID).rateAt(t0);
-    h.sample(snapshot(t0 + 45 * MIN, 50, null, sec(t0 + HOUR)), t0 + 45 * MIN);
-    expect(h.rateProfile(SESSION_ID).rateAt(t0)).toBeGreaterThan(before);
-  });
-
-  it("is empty for a window the log never saw", () => {
-    const h = new UsageHistory();
-    h.sample(snapshot(t0, 10, null, sec(t0 + HOUR)), t0);
-    expect(h.rateProfile("weekly_scoped:fable").hasData).toBe(false);
-  });
-});

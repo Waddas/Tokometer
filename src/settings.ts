@@ -99,11 +99,12 @@ const dayBoxes = new Map<number, { label: HTMLLabelElement; input: HTMLInputElem
   }
 }
 
-/* ---- beta features: one checkbox per flag, sent as the whole struct ---- */
-let beta: api.BetaFeatures = { learnedForecast: false };
-const BETA_BOXES: [keyof api.BetaFeatures, HTMLInputElement][] = [
-  ["learnedForecast", document.getElementById("beta-learned-forecast") as HTMLInputElement],
-];
+/* ---- beta features: one checkbox per flag, sent as the whole struct. None
+ * are being trialled right now; to add one, declare the flag in api.ts and
+ * state.rs, give it a checkbox in a "Beta features" section of settings.html,
+ * and list the pair here. ---- */
+let beta: api.BetaFeatures = {};
+const BETA_BOXES: [api.BetaFlag, HTMLInputElement][] = [];
 for (const [flag, box] of BETA_BOXES) {
   box.addEventListener("change", () => {
     beta = { ...beta, [flag]: box.checked };
