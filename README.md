@@ -56,7 +56,7 @@
 | **Drag** the ↘ corner grip | Resize the widget to any scale |
 | **Click** the mascot | Flip between mascot and usage graph |
 | **Hover** the graph | Read the time and percentage under the cursor |
-| **Right-click** the graph | Switch between the 5-hour and 7-day windows |
+| **Right-click** the graph | Cycle through the limit windows: 5-hour, 7-day, and any model-specific limit |
 | **Right-click** the mascot | Pick a mascot (Clawd / Axolotl / Cat) |
 | **Hover** | Reveal pin-on-top, refresh, settings, and hide buttons |
 | **Settings window** (⚙ or tray) | Layout, size, mascot, tray icon, work days, pin, start at login |

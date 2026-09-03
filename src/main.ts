@@ -370,6 +370,7 @@ void api.onStateChange((s) => {
   splash.setMascot(s.mascot);
   markMascot(s.mascot);
   graph.setWorkDays(s.workDays);
+  graph.setHidden(s.hiddenLimits);
   usage.setHidden(s.hiddenLimits);
 });
 
@@ -380,6 +381,7 @@ void api.getState().then((st) => {
   splash.setMascot(st.mascot);
   markMascot(st.mascot);
   graph.setWorkDays(st.workDays);
+  graph.setHidden(st.hiddenLimits);
   usage.setHidden(st.hiddenLimits);
   if (st.lastUsage) {
     lastReal = st.lastUsage;

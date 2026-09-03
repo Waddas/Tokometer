@@ -20,6 +20,13 @@ export interface LimitWindow {
 export const SESSION_ID = "session";
 export const WEEKLY_ALL_ID = "weekly_all";
 
+/** The windows every account has; the tiles and graph stand these in until
+ *  the first poll reports the real list. */
+export const DEFAULT_WINDOWS: readonly Pick<LimitWindow, "id" | "label">[] = [
+  { id: SESSION_ID, label: "5h" },
+  { id: WEEKLY_ALL_ID, label: "7d" },
+];
+
 export interface UsageSnapshot {
   status: "ok" | "error";
   source: "oauth" | "messages" | null;
