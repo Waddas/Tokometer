@@ -56,11 +56,11 @@ export type Size = "small" | "medium" | "large";
 /** Mirrors the Rust `TrayStyle` enum (state.rs). */
 export type TrayStyle = "ring" | "text";
 
-/** Opt-in feature previews; mirrors the Rust `BetaFeatures` (state.rs). */
-export interface BetaFeatures {
-  /** Forecast from the learned hour-of-week profile instead of the recent rate. */
-  learnedForecast: boolean;
-}
+/** Names of the opt-in feature previews being trialled; none right now. */
+export type BetaFlag = never;
+/** Opt-in feature previews, one boolean per flag; mirrors the Rust
+ *  `BetaFeatures` (state.rs). */
+export type BetaFeatures = Record<BetaFlag, boolean>;
 
 /** The persisted preferences, as get_state and state://change report them. */
 export interface Preferences {
