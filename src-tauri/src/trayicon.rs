@@ -145,18 +145,23 @@ mod tests {
 /// so this is effectively a supersample for clean anti-aliasing.
 const GAUGE_PX: usize = 64;
 
+/// Unfilled remainder of the ring: a mid grey at partial alpha, so it lands
+/// slightly lighter than a dark menubar and slightly darker than a light one.
+const TRACK_COLOR: (u8, u8, u8) = (160, 160, 160);
+const TRACK_ALPHA: f32 = 0.55;
+
 /// A ring that fills clockwise from 12 o'clock to `pct`, coloured green → orange
-/// → red as usage climbs. The unfilled remainder is the same colour at low
-/// alpha, so the track reads on any background.
+/// → red as usage climbs. The unfilled remainder is a neutral track that stays
+/// visible on both light and dark menubars, so the ring still reads at low usage.
 pub fn gauge(pct: f64) -> Image<'static> {
     use std::f32::consts::TAU;
 
     let s = GAUGE_PX;
     let center = s as f32 / 2.0;
-    let outer = s as f32 * 0.44;
-    let inner = outer - s as f32 * 0.16;
+    let outer = s as f32 * 0.47;
+    let inner = outer - s as f32 * 0.2;
     let prog = (pct / 100.0).clamp(0.0, 1.0) as f32;
-    let (r, g, b) = arc_color(prog);
+    let arc = arc_color(prog);
 
     // Angular anti-alias half-width (in turns) ≈ one source pixel at the edge.
     let aa = 1.0 / (TAU * outer);
@@ -182,29 +187,32 @@ pub fn gauge(pct: f64) -> Image<'static> {
                 turn += 1.0;
             }
 
-            // Blend the filled arc over the faint track at the progress edge.
+            // Blend the filled arc over the track at the progress edge.
             let fill = ((prog - turn) / aa + 0.5).clamp(0.0, 1.0);
-            let alpha = cov * (fill + (1.0 - fill) * 0.22);
+            let track = (1.0 - fill) * TRACK_ALPHA;
+            let alpha = fill + track;
+            let mix = |a: u8, t: u8| ((a as f32 * fill + t as f32 * track) / alpha).round() as u8;
 
             let i = (y * s + x) * 4;
-            rgba[i] = r;
-            rgba[i + 1] = g;
-            rgba[i + 2] = b;
-            rgba[i + 3] = (alpha * 255.0).round() as u8;
+            rgba[i] = mix(arc.0, TRACK_COLOR.0);
+            rgba[i + 1] = mix(arc.1, TRACK_COLOR.1);
+            rgba[i + 2] = mix(arc.2, TRACK_COLOR.2);
+            rgba[i + 3] = (cov * alpha * 255.0).round() as u8;
         }
     }
 
     Image::new_owned(rgba, s as u32, s as u32)
 }
 
-/// Green (low) → orange (mid) → red (high). Orange rather than yellow at the
-/// midpoint so it still reads on a light background. The blend points match
-/// the widget's severity thresholds (src/thresholds.ts): full orange at 50%,
-/// full red by 80%.
+/// Green (low) → orange (mid) → red (high), using the macOS system colours so
+/// the ring is as saturated as native menubar indicators and reads on both a
+/// dark and a light menubar. Orange rather than yellow at the midpoint so it
+/// still reads on a light background. The blend points match the widget's
+/// severity thresholds (src/thresholds.ts): full orange at 50%, full red by 80%.
 fn arc_color(prog: f32) -> (u8, u8, u8) {
-    const GREEN: (f32, f32, f32) = (46.0, 160.0, 80.0);
-    const ORANGE: (f32, f32, f32) = (224.0, 140.0, 30.0);
-    const RED: (f32, f32, f32) = (214.0, 60.0, 60.0);
+    const GREEN: (f32, f32, f32) = (52.0, 199.0, 89.0);
+    const ORANGE: (f32, f32, f32) = (255.0, 149.0, 0.0);
+    const RED: (f32, f32, f32) = (255.0, 59.0, 48.0);
     let lerp = |a: (f32, f32, f32), b: (f32, f32, f32), t: f32| {
         (
             a.0 + (b.0 - a.0) * t,
