@@ -129,6 +129,12 @@ npm run tauri dev
 
 Or with [Task](https://taskfile.dev/): `task install`, then `task dev`.
 
+`task dev` runs under a separate identifier (`….tokometer.dev`), so its
+history and settings are isolated from an installed Tokometer and the two can
+run side by side. `task dev:seed` copies the installed app's `history.json`
+and `state.json` into the dev build's data directory when you want real data
+to work against.
+
 **Dev tips**
 
 - Press **D** in a dev build to toggle dev mode — a small badge in the strip
