@@ -276,7 +276,7 @@ pub fn run() {
             }
 
             poller::spawn(handle);
-            update::spawn_startup_check(app.handle().clone());
+            update::spawn_background_checks(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())
