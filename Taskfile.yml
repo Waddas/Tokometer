@@ -21,10 +21,32 @@ tasks:
   # The long-running dev servers invoke their CLIs through node directly: on
   # Windows, going through npm inserts cmd.exe batch shims whose "Terminate
   # batch job (Y/N)?" prompts wedge the terminal on Ctrl-C.
+  #
+  # `dev` runs under its own identifier (tauri.dev.conf.json) so its history and
+  # state never touch the installed app's; `dev:seed` copies them across.
   dev:
-    desc: Run the full Tauri app (Rust + webview) in dev mode
+    desc: Run the full Tauri app (Rust + webview) in dev mode, with isolated app data
     cmds:
-      - node node_modules/@tauri-apps/cli/tauri.js dev
+      - node node_modules/@tauri-apps/cli/tauri.js dev --config src-tauri/tauri.dev.conf.json
+
+  dev:seed:
+    desc: Copy the installed app's history and state into the dev build's app data
+    vars:
+      MAIN_ID: com.bradleywadsworth.tokometer
+      DEV_ID: "{{.MAIN_ID}}.dev"
+    cmds:
+      - cmd: |
+          src="$HOME/Library/Application Support/{{.MAIN_ID}}"
+          dst="$HOME/Library/Application Support/{{.DEV_ID}}"
+          mkdir -p "$dst" && cp "$src"/history.json "$src"/state.json "$dst"/
+        platforms: [darwin]
+      - cmd: |
+          src="${XDG_CONFIG_HOME:-$HOME/.config}/{{.MAIN_ID}}"
+          dst="${XDG_CONFIG_HOME:-$HOME/.config}/{{.DEV_ID}}"
+          mkdir -p "$dst" && cp "$src"/history.json "$src"/state.json "$dst"/
+        platforms: [linux]
+      - cmd: cmd /c 'mkdir "%APPDATA%\{{.DEV_ID}}" 2>nul & copy /y "%APPDATA%\{{.MAIN_ID}}\history.json" "%APPDATA%\{{.DEV_ID}}" && copy /y "%APPDATA%\{{.MAIN_ID}}\state.json" "%APPDATA%\{{.DEV_ID}}"'
+        platforms: [windows]
 
   dev:web:
     desc: Run only the Vite frontend dev server
