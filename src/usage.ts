@@ -2,7 +2,7 @@
 // percentages and reset countdowns; thresholds and time format from
 // Clawdmeter's firmware ui.cpp. Right-clicking a tile flips it to the info
 // view: the limit's name over its countdown, no percentage.
-import { SESSION_ID, WEEKLY_ALL_ID, type LimitWindow, type UsageSnapshot } from "./api";
+import { DEFAULT_WINDOWS, type LimitWindow, type UsageSnapshot } from "./api";
 import { AMBER_AT_PCT, RED_AT_PCT } from "./thresholds";
 
 function pctColor(pct: number): string {
@@ -46,10 +46,7 @@ interface Tile {
 }
 
 /** Shown until the first poll lands, so the widget is never blank. */
-const PLACEHOLDERS: Tile[] = [
-  { id: SESSION_ID, label: "5h", window: null },
-  { id: WEEKLY_ALL_ID, label: "7d", window: null },
-];
+const PLACEHOLDERS: Tile[] = DEFAULT_WINDOWS.map((w) => ({ ...w, window: null }));
 
 export class UsageRenderer {
   private panels = new Map<string, PanelEls>();
@@ -133,7 +130,7 @@ export class UsageRenderer {
     resetLine.append(resetLabel, reset);
     root.append(label, pct, resetLine);
     root.classList.toggle("info", this.infoTiles.has(tile.id));
-    // Right-click flips the tile's own content, like the graph's 5h/7d switch.
+    // Right-click flips the tile's own content, like the graph's window switch.
     root.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation(); // the window-level handler only closes menus

@@ -1,22 +1,45 @@
 // Usage-over-time graph, shown in place of the mascot: history line coloured
 // by the usage thresholds, a dotted prediction at the current rate, a red bar
 // at the limit, and a faint ghost of the previous window. Right-clicking it
-// switches between the 5-hour and 7-day windows; hovering reads off the time
-// and percentage under the cursor.
-import { SESSION_ID, WEEKLY_ALL_ID, type UsageSnapshot } from "./api";
+// cycles through the limit windows the tiles show (5h, 7d, and any scoped
+// model limit); hovering reads off the time and percentage under the cursor.
+import {
+  DEFAULT_WINDOWS,
+  SESSION_ID,
+  WEEKLY_ALL_ID,
+  type LimitWindow,
+  type UsageSnapshot,
+} from "./api";
 import type { UsageHistory } from "./history";
 import { AMBER_AT_PCT, RED_AT_PCT } from "./thresholds";
 import { trendSlope, projectUsage, type Pt } from "./trend";
 
-type Mode = "session" | "weekly";
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
 
-// `key` is the window id the snapshot and the history log are keyed by.
-const MODE = {
-  session: { key: SESSION_ID, windowMs: 5 * 3_600_000, trendMs: 30 * 60_000, label: "5h" },
-  weekly: { key: WEEKLY_ALL_ID, windowMs: 7 * 86_400_000, trendMs: 6 * 3_600_000, label: "7d" },
-} as const;
+/** How long a window runs, and how far back its rate-of-use trend looks. */
+interface Span {
+  windowMs: number;
+  trendMs: number;
+}
 
-const MODE_KEY = "graph-mode";
+const SESSION_SPAN: Span = { windowMs: 5 * HOUR_MS, trendMs: 30 * 60_000 };
+const WEEKLY_SPAN: Span = { windowMs: 7 * DAY_MS, trendMs: 6 * HOUR_MS };
+const MONTHLY_SPAN: Span = { windowMs: 30 * DAY_MS, trendMs: DAY_MS };
+
+/** A window's span from its id's kind (the part before any ":<model>" scope,
+ *  see usage.rs). Unknown kinds are read as weekly, the shape of every scoped
+ *  limit so far. */
+export function windowSpan(id: string): Span {
+  const kind = id.split(":")[0];
+  if (kind === SESSION_ID) return SESSION_SPAN;
+  if (kind.startsWith("monthly")) return MONTHLY_SPAN;
+  return WEEKLY_SPAN;
+}
+
+/** The id of the window on show. Older builds stored a "session"/"weekly"
+ *  mode here; "weekly" maps onto the all-model week. */
+const WINDOW_KEY = "graph-mode";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -44,8 +67,11 @@ function chromeScale(): number {
 }
 
 export class UsageGraph {
-  private mode: Mode;
+  /** The chosen window id; `current()` resolves it against what's showable. */
+  private windowId: string;
   private snapshot: UsageSnapshot | null = null;
+  /** Window ids hidden in settings; they get no graph, as they get no tile. */
+  private hidden: string[] = [];
   // Weekdays the 7-day prediction ramps, indexed Sun..Sat; all-on until set.
   private workDays: boolean[] = [true, true, true, true, true, true, true];
   /** Cursor x in canvas px while hovering, null otherwise. */
@@ -65,12 +91,15 @@ export class UsageGraph {
     private canvas: HTMLCanvasElement,
     private history: GraphSource,
   ) {
-    this.mode = localStorage.getItem(MODE_KEY) === "weekly" ? "weekly" : "session";
+    const saved = localStorage.getItem(WINDOW_KEY);
+    this.windowId = saved === "weekly" ? WEEKLY_ALL_ID : (saved ?? SESSION_ID);
     canvas.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation(); // keep the mascot picker out of graph right-clicks
-      this.mode = this.mode === "session" ? "weekly" : "session";
-      localStorage.setItem(MODE_KEY, this.mode);
+      const windows = this.windows();
+      const i = windows.findIndex((w) => w.id === this.current().id);
+      this.windowId = windows[(i + 1) % windows.length].id;
+      localStorage.setItem(WINDOW_KEY, this.windowId);
       this.draw();
     });
     // offsetX is in the element's own space, which the real-pixel layout
@@ -110,6 +139,27 @@ export class UsageGraph {
     this.draw();
   }
 
+  /** Window ids the user hid in settings; the cycle skips them. */
+  setHidden(ids: string[]): void {
+    this.hidden = ids;
+    this.draw();
+  }
+
+  /** The windows the graph can show: the snapshot's minus the hidden ones, in
+   *  the API's order, mirroring the tiles. The well-known pair stands in until
+   *  a poll lands (or when every window is hidden, so the graph isn't blank). */
+  private windows(): readonly Pick<LimitWindow, "id" | "label">[] {
+    const shown = this.snapshot?.windows.filter((w) => !this.hidden.includes(w.id)) ?? [];
+    return shown.length > 0 ? shown : DEFAULT_WINDOWS;
+  }
+
+  /** The window on show: the chosen one, or the first showable once the
+   *  chosen one is hidden or no longer reported. */
+  private current() {
+    const windows = this.windows();
+    return windows.find((w) => w.id === this.windowId) ?? windows[0];
+  }
+
   private draw(): void {
     const ctx = this.canvas.getContext("2d");
     if (!ctx) return;
@@ -129,15 +179,16 @@ export class UsageGraph {
     this.chrome = chromeScale();
     const c = this.chrome;
     const pad = PAD * c;
-    const cfg = MODE[this.mode];
+    const shown = this.current();
+    const span = windowSpan(shown.id);
     const now = Date.now();
-    const win = this.snapshot?.windows.find((w) => w.id === cfg.key) ?? null;
+    const win = this.snapshot?.windows.find((w) => w.id === shown.id) ?? null;
     // No reset time means no window is running (the last one lapsed and
     // nothing has started a new one); the axes then track the current moment.
     const resetMs = win?.resetAt ? win.resetAt * 1000 : null;
     const end = resetMs ?? now;
-    const start = end - cfg.windowMs;
-    const x = (ms: number) => pad + ((ms - start) / cfg.windowMs) * (w - 2 * pad);
+    const start = end - span.windowMs;
+    const x = (ms: number) => pad + ((ms - start) / span.windowMs) * (w - 2 * pad);
     const y = (pct: number) => h - pad - (pct / 100) * (h - 2 * pad);
 
     // The corner label makes way for the hover readout (drawHover).
@@ -145,7 +196,7 @@ export class UsageGraph {
       ctx.font = `400 ${14 * c}px Grotesk, sans-serif`;
       ctx.fillStyle = this.dim;
       ctx.textBaseline = "top";
-      ctx.fillText(cfg.label, pad, pad + 4 * c);
+      ctx.fillText(shown.label, pad, pad + 4 * c);
     }
 
     ctx.lineCap = "round";
@@ -169,7 +220,7 @@ export class UsageGraph {
     // no window is running there is no reset to align to, so the ghost sits
     // at its true time and slides into the past as the axes track "now".
     if (win) {
-      const prev = this.history.previousWindow(cfg.key, resetMs, cfg.windowMs);
+      const prev = this.history.previousWindow(shown.id, resetMs, span.windowMs);
       if (prev && prev.pts.some((p) => p.pct >= GHOST_MIN_PEAK_PCT)) {
         const shift = resetMs === null ? 0 : end - prev.resetMs;
         const ghost = prev.pts.filter((p) => p.ms + shift >= start);
@@ -214,7 +265,7 @@ export class UsageGraph {
     gradient.addColorStop(AMBER_AT_PCT / 100, this.amber);
     gradient.addColorStop(RED_AT_PCT / 100, this.red);
 
-    const pts = this.history.points(cfg.key, start, resetMs).filter((p) => p.ms <= now);
+    const pts = this.history.points(shown.id, start, resetMs).filter((p) => p.ms <= now);
     pts.push({ ms: Math.min(now, end), pct: win.utilization });
 
     // Soft area fill anchors the line to the baseline.
@@ -237,13 +288,13 @@ export class UsageGraph {
     this.strokePolyline(ctx, pts, gradient, x, y);
 
     let proj: Pt[] | null = null;
-    const slope = trendSlope(pts, cfg.trendMs, now);
+    const slope = trendSlope(pts, span.trendMs, now);
     if (win.resetAt && slope !== null && now < end) {
       const rise = Math.max(0, slope);
-      // The work-day mask only shapes the weekly window; the 5h projection is
+      // The work-day mask only shapes multi-day windows; the 5h projection is
       // intra-day, so it always ramps.
       const isWorkDay =
-        this.mode === "weekly"
+        span.windowMs > DAY_MS
           ? (ms: number) => this.workDays[new Date(ms).getDay()] !== false
           : () => true;
       proj = projectUsage(now, end, win.utilization, rise, isWorkDay);
@@ -259,7 +310,7 @@ export class UsageGraph {
     ctx.arc(x(cur.ms), y(cur.pct), 2.5 * c, 0, Math.PI * 2);
     ctx.fill();
 
-    this.drawHover(ctx, w, start, cfg.windowMs, pts, proj, y);
+    this.drawHover(ctx, w, start, span.windowMs, pts, proj, y);
   }
 
   /** Crosshair plus a time · percentage readout for the hovered instant. */
@@ -302,7 +353,8 @@ export class UsageGraph {
     const when = new Date(t);
     const hh = String(when.getHours()).padStart(2, "0");
     const mm = String(when.getMinutes()).padStart(2, "0");
-    const day = this.mode === "weekly" ? `${DAY_NAMES[when.getDay()]} ` : "";
+    // Multi-day windows need the weekday to place the time.
+    const day = windowMs > DAY_MS ? `${DAY_NAMES[when.getDay()]} ` : "";
     const value = pct === null ? "" : ` · ${pct.toFixed(0)}%${recorded === null ? " est" : ""}`;
     const label = `${day}${hh}:${mm}${value}`;
     ctx.font = `400 ${14 * c}px Grotesk, sans-serif`;

@@ -37,12 +37,14 @@ function curve(start: number, end: number, step: number, target: number): Pt[] {
  *  (`carry_missing_windows` in usage.rs). */
 export type MockVariant = "fresh" | "stale-scoped";
 
+/** A scoped weekly limit, so the third tile and graph are previewable. */
+const SCOPED_ID = "weekly_scoped:fable";
+
 export class MockHistory {
-  private five: Pt[];
-  private week: Pt[];
-  /** Reset times of the (mock) previous windows, epoch ms. */
-  private prevFiveReset: number;
-  private prevWeekReset: number;
+  /** Sample series by window id. */
+  private series: Record<string, Pt[]>;
+  /** Reset times of the (mock) previous windows by window id, epoch ms. */
+  private prevReset: Record<string, number>;
   readonly snapshot: UsageSnapshot;
 
   constructor(now = Date.now(), variant: MockVariant = "fresh") {
@@ -50,21 +52,32 @@ export class MockHistory {
     // that lapsed 24 minutes before this one began.
     const fiveEnd = now + 1.5 * HOUR;
     const fiveStart = fiveEnd - 5 * HOUR;
-    this.prevFiveReset = fiveStart - 0.4 * HOUR;
-    this.five = [
-      ...curve(this.prevFiveReset - 5 * HOUR, this.prevFiveReset, 2 * MIN, 88),
+    const prevFiveReset = fiveStart - 0.4 * HOUR;
+    const five = [
+      ...curve(prevFiveReset - 5 * HOUR, prevFiveReset, 2 * MIN, 88),
       ...curve(fiveStart, now, MIN, 72),
     ];
 
     // 7d window: 5 days in, comfortable; previous week ran hotter and
-    // lapsed 10 hours before this one began.
+    // lapsed 10 hours before this one began. The scoped limit shares the
+    // week's boundaries and runs lighter.
     const weekEnd = now + 2 * DAY;
     const weekStart = weekEnd - 7 * DAY;
-    this.prevWeekReset = weekStart - 10 * HOUR;
-    this.week = [
-      ...curve(this.prevWeekReset - 7 * DAY, this.prevWeekReset, 30 * MIN, 61),
+    const prevWeekReset = weekStart - 10 * HOUR;
+    const week = [
+      ...curve(prevWeekReset - 7 * DAY, prevWeekReset, 30 * MIN, 61),
       ...curve(weekStart, now, 15 * MIN, 30),
     ];
+    const scoped = [
+      ...curve(prevWeekReset - 7 * DAY, prevWeekReset, 30 * MIN, 44),
+      ...curve(weekStart, now, 15 * MIN, 21),
+    ];
+    this.series = { [SESSION_ID]: five, [WEEKLY_ALL_ID]: week, [SCOPED_ID]: scoped };
+    this.prevReset = {
+      [SESSION_ID]: prevFiveReset,
+      [WEEKLY_ALL_ID]: prevWeekReset,
+      [SCOPED_ID]: prevWeekReset,
+    };
 
     const carried = variant === "stale-scoped";
     this.snapshot = {
@@ -76,20 +89,19 @@ export class MockHistory {
         {
           id: SESSION_ID,
           label: "5h",
-          utilization: this.five[this.five.length - 1].pct,
+          utilization: five[five.length - 1].pct,
           resetAt: Math.round(fiveEnd / 1000),
         },
         {
           id: WEEKLY_ALL_ID,
           label: "7d",
-          utilization: this.week[this.week.length - 1].pct,
+          utilization: week[week.length - 1].pct,
           resetAt: Math.round(weekEnd / 1000),
         },
-        // A scoped limit, so the third tile is previewable.
         {
-          id: "weekly_scoped:fable",
+          id: SCOPED_ID,
           label: "Fable",
-          utilization: 21,
+          utilization: scoped[scoped.length - 1].pct,
           resetAt: Math.round(weekEnd / 1000),
           ...(carried ? { stale: true } : {}),
         },
@@ -98,21 +110,14 @@ export class MockHistory {
     };
   }
 
-  /** The mock only graphs the two windows the graph has modes for. */
-  private series(id: string): Pt[] | null {
-    if (id === SESSION_ID) return this.five;
-    if (id === WEEKLY_ALL_ID) return this.week;
-    return null;
-  }
-
   points(id: string, startMs: number): Pt[] {
-    return (this.series(id) ?? []).filter((p) => p.ms >= startMs);
+    return (this.series[id] ?? []).filter((p) => p.ms >= startMs);
   }
 
   previousWindow(id: string, _currentResetMs: number | null, windowMs: number): WindowSlice | null {
-    const series = this.series(id);
-    if (!series) return null;
-    const resetMs = id === SESSION_ID ? this.prevFiveReset : this.prevWeekReset;
+    const series = this.series[id];
+    const resetMs = this.prevReset[id];
+    if (!series || resetMs === undefined) return null;
     const pts = series.filter((p) => p.ms <= resetMs && p.ms >= resetMs - windowMs);
     return pts.length >= 2 ? { pts, resetMs } : null;
   }
