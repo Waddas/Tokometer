@@ -261,9 +261,8 @@ void api.onUsage((s) => {
 });
 
 /* ---- dev: D toggles dev mode, shown as a badge in the top strip. While on,
- * M cycles the data source (live → mock → mock-stale → mock-quiet → error),
- * A cycles the mascot animation and U offers a mock update; leaving dev mode
- * resets all. ---- */
+ * M cycles the data source (live → mock → mock-stale → error), A cycles the
+ * mascot animation and U offers a mock update; leaving dev mode resets all. ---- */
 if (import.meta.env.DEV) {
   let devMode = false;
   let pinnedAnim = -1; // -1 = automatic rate-grouped rotation
@@ -271,8 +270,7 @@ if (import.meta.env.DEV) {
   let updateMocked = false;
   // "mock-stale" is the same mock served by the fallback probe: its scoped
   // window is a carried-over value, so that tile renders dimmed.
-  const SOURCES = ["live", "mock", "mock-stale", "mock-quiet", "error"] as const;
-  const MOCK_VARIANTS = { mock: "fresh", "mock-stale": "stale-scoped", "mock-quiet": "quiet" } as const;
+  const SOURCES = ["live", "mock", "mock-stale", "error"] as const;
   let devSource: (typeof SOURCES)[number] = "live";
 
   const badge = document.createElement("div");
@@ -305,8 +303,8 @@ if (import.meta.env.DEV) {
       if (devSource === src) return;
       devSource = src;
       mockActive = src !== "live";
-      if (src in MOCK_VARIANTS) {
-        const mock = new MockHistory(Date.now(), MOCK_VARIANTS[src as keyof typeof MOCK_VARIANTS]);
+      if (src === "mock" || src === "mock-stale") {
+        const mock = new MockHistory(Date.now(), src === "mock" ? "fresh" : "stale-scoped");
         graph.setHistory(mock);
         applySnapshot(mock.snapshot);
         void api.setTrayOverride(mock.snapshot);
@@ -372,7 +370,6 @@ void api.onStateChange((s) => {
   splash.setMascot(s.mascot);
   markMascot(s.mascot);
   graph.setWorkDays(s.workDays);
-  graph.setLearnedForecast(s.beta.learnedForecast);
   usage.setHidden(s.hiddenLimits);
 });
 
@@ -383,7 +380,6 @@ void api.getState().then((st) => {
   splash.setMascot(st.mascot);
   markMascot(st.mascot);
   graph.setWorkDays(st.workDays);
-  graph.setLearnedForecast(st.beta.learnedForecast);
   usage.setHidden(st.hiddenLimits);
   if (st.lastUsage) {
     lastReal = st.lastUsage;

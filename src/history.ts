@@ -3,7 +3,7 @@
 // its log at startup and appends live snapshots as they stream in, so the
 // graph never waits on a round-trip.
 import type { HistorySample, UsageSnapshot } from "./api";
-import { RateProfile, type Gain, type Pt } from "./trend";
+import type { Pt } from "./trend";
 
 /** A completed usage window's samples, plus the reset time that identifies it. */
 export interface WindowSlice {
@@ -19,13 +19,10 @@ const RESET_TOLERANCE_MS = 90_000;
 
 export class UsageHistory {
   private samples: HistorySample[] = [];
-  /** Rate profiles by window id, rebuilt lazily after the log changes. */
-  private profiles = new Map<string, RateProfile>();
 
   /** Replace the log with the backend's (startup, or after migration). */
   load(samples: HistorySample[]): void {
     this.samples = [...samples];
-    this.profiles.clear();
   }
 
   /** Record a snapshot at its fetch time; near-duplicates are dropped. */
@@ -39,7 +36,6 @@ export class UsageHistory {
       w[win.id] = { pct: win.utilization, reset: win.resetAt != null ? win.resetAt * 1000 : null };
     }
     this.samples.push({ ms, w });
-    this.profiles.clear();
   }
 
   /**
@@ -95,37 +91,5 @@ export class UsageHistory {
       pts.push({ ms: s.ms, pct: win.pct });
     }
     return pts.length >= 2 ? { pts, resetMs } : null;
-  }
-
-  /** How fast this window's usage typically grows at each hour of the week. */
-  rateProfile(id: string): RateProfile {
-    let profile = this.profiles.get(id);
-    if (!profile) {
-      profile = RateProfile.from(this.gains(id));
-      this.profiles.set(id, profile);
-    }
-    return profile;
-  }
-
-  /**
-   * Usage gained between consecutive polls of one window. When the reset time
-   * changes in between, the window rolled over and the new one started from
-   * zero, so everything it shows was gained in the gap. A lapse (reset gone,
-   * usage back to zero) yields a negative gain, which the profile ignores.
-   */
-  private *gains(id: string): Generator<Gain> {
-    let prev: { ms: number; pct: number; reset?: number | null } | null = null;
-    for (const s of this.samples) {
-      const win = s.w[id];
-      if (!win) continue;
-      if (prev) {
-        const sameWindow =
-          prev.reset == null ||
-          win.reset == null ||
-          Math.abs(win.reset - prev.reset) <= RESET_TOLERANCE_MS;
-        yield { fromMs: prev.ms, toMs: s.ms, pct: sameWindow ? win.pct - prev.pct : win.pct };
-      }
-      prev = { ms: s.ms, ...win };
-    }
   }
 }
