@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.0](https://github.com/Waddas/Tokometer/compare/v1.4.0...v1.5.0) (2026-09-03)
+
+
+### Features
+
+* check for updates daily while running ([#23](https://github.com/Waddas/Tokometer/issues/23)) ([6d6888a](https://github.com/Waddas/Tokometer/commit/6d6888ad1a43a3b30701b0233e07904ed84e139a))
+* graph every displayed limit window, cycling on right-click ([#25](https://github.com/Waddas/Tokometer/issues/25)) ([51a85ca](https://github.com/Waddas/Tokometer/commit/51a85ca078ce6e63c52fbe9771bf58911e9b6940))
+* legible tray ring at low usage, isolated dev app data ([#22](https://github.com/Waddas/Tokometer/issues/22)) ([acc9ba0](https://github.com/Waddas/Tokometer/commit/acc9ba03899ef6d1a0831fe678d24b65fe483ff7))
+* retire the learned usage forecast beta ([#24](https://github.com/Waddas/Tokometer/issues/24)) ([5179ee4](https://github.com/Waddas/Tokometer/commit/5179ee4cbc819000871d26563f6470e357bf7305))
+
 ## [1.4.0](https://github.com/Waddas/Tokometer/compare/v1.3.0...v1.4.0) (2026-09-02)
 
 
