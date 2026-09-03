@@ -13,6 +13,10 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 /// settle before the network request goes out.
 const STARTUP_DELAY: Duration = Duration::from_secs(10);
 
+/// Gap between the silent background checks that follow, so a menubar app
+/// left running for weeks still learns about new releases.
+const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+
 /// Version and notes the dev override advertises (see `set_override`).
 const MOCK_VERSION: &str = "9.9.9";
 const MOCK_NOTES: &str = "### Features\n\n* a mock release, for previewing the update card ([#0](x)) ([0000000](x))\n* **widget:** nothing real changed\n\n### Bug Fixes\n\n* nothing real was fixed either\n";
@@ -118,12 +122,16 @@ fn available(app: &AppHandle, version: String, notes: String) -> UpdatePhase {
     }
 }
 
-/// Run one silent check shortly after launch. Only an available release
-/// changes anything visible; a failed or empty check leaves the app untouched.
-pub fn spawn_startup_check(app: AppHandle) {
+/// Run a silent check shortly after launch, then once a day for as long as
+/// the app runs. Only an available release changes anything visible; a failed
+/// or empty check leaves the app untouched.
+pub fn spawn_background_checks(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_DELAY).await;
-        check(app, false).await;
+        loop {
+            check(app.clone(), false).await;
+            tokio::time::sleep(CHECK_INTERVAL).await;
+        }
     });
 }
 
@@ -193,7 +201,7 @@ pub fn set_override(app: &AppHandle, available: bool) {
 
 /// Check GitHub for a newer release and offer it. `manual` (tray item or
 /// settings button) reports the outcome in the phase and tray status line;
-/// the silent startup check reports nothing but an available release.
+/// the silent background checks report nothing but an available release.
 async fn check(app: AppHandle, manual: bool) {
     if matches!(
         phase(&app),
