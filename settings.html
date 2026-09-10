@@ -7,20 +7,28 @@
   </head>
   <body>
     <main>
+      <header class="page-header">
+        <h1>Settings</h1>
+        <p>Widget appearance and preferences.</p>
+      </header>
+      <section>
+        <h2>Appearance</h2>
+        <div class="options" id="opt-theme" role="group" aria-label="Theme"></div>
+      </section>
       <section>
         <h2>Widget</h2>
         <div class="field">
           <span class="label">Layout</span>
-          <div class="options" id="opt-layout"></div>
+          <div class="options" id="opt-layout" role="group" aria-label="Layout"></div>
         </div>
         <div class="field">
           <span class="label">Size</span>
-          <div class="options" id="opt-size"></div>
+          <div class="options" id="opt-size" role="group" aria-label="Size"></div>
           <p class="hint" id="size-hint">Or drag the widget's bottom-right grip to any size.</p>
         </div>
         <div class="field">
           <span class="label">Mascot</span>
-          <div class="options" id="opt-mascot"></div>
+          <div class="options" id="opt-mascot" role="group" aria-label="Mascot"></div>
         </div>
         <div class="field">
           <span class="label">Limits</span>
@@ -33,7 +41,7 @@
       <section>
         <h2>Tray icon</h2>
         <div class="field">
-          <div class="options" id="opt-tray"></div>
+          <div class="options" id="opt-tray" role="group" aria-label="Tray icon"></div>
         </div>
         <p class="hint">Ring shows a colour-coded gauge; Text shows the 5h percentage.</p>
       </section>

@@ -51,9 +51,18 @@ const PAD = 8; // px at design size; rendered damped by --chrome
 const GHOST_MIN_PEAK_PCT = 5;
 
 /** A :root CSS variable's colour, so the canvas can't drift from styles.css. */
-function cssColor(name: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
+function graphColors() {
+  const style = getComputedStyle(document.documentElement);
+  const color = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback;
+  return {
+    bg: color("--bg", "#141516"),
+    green: color("--green", "#a3bc90"),
+    amber: color("--amber", "#e3b078"),
+    red: color("--red", "#e68c83"),
+    dim: color("--dim", "#a9adaa"),
+    text: color("--text", "#f1f0ed"),
+    track: color("--track", "#2e3232"),
+  };
 }
 
 /** The :root --chrome factor (see styles.css), so the graph's furniture —
@@ -79,13 +88,7 @@ export class UsageGraph {
   /** The --chrome factor, refreshed at the top of each draw. */
   private chrome = 1;
 
-  private readonly bg = cssColor("--bg", "#000000");
-  private readonly green = cssColor("--green", "#788c5d");
-  private readonly amber = cssColor("--amber", "#d97757");
-  private readonly red = cssColor("--red", "#c0392b");
-  private readonly dim = cssColor("--dim", "#b0aea5");
-  private readonly text = cssColor("--text", "#faf9f5");
-  private readonly track = cssColor("--track", "#2a2a28");
+  private colors = graphColors();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -176,6 +179,8 @@ export class UsageGraph {
     const h = this.canvas.clientHeight;
     ctx.clearRect(0, 0, w, h);
 
+    // Theme changes must repaint the canvas as well as the surrounding CSS.
+    this.colors = graphColors();
     this.chrome = chromeScale();
     const c = this.chrome;
     const pad = PAD * c;
@@ -194,7 +199,7 @@ export class UsageGraph {
     // The corner label makes way for the hover readout (drawHover).
     if (this.hoverX === null) {
       ctx.font = `400 ${14 * c}px Grotesk, sans-serif`;
-      ctx.fillStyle = this.dim;
+      ctx.fillStyle = this.colors.dim;
       ctx.textBaseline = "top";
       ctx.fillText(shown.label, pad, pad + 4 * c);
     }
@@ -203,7 +208,7 @@ export class UsageGraph {
     ctx.lineJoin = "round";
 
     // Faint quarter gridlines give the empty space some structure.
-    ctx.strokeStyle = this.track;
+    ctx.strokeStyle = this.colors.track;
     ctx.lineWidth = c;
     for (const pct of [25, 50, 75]) {
       ctx.beginPath();
@@ -224,7 +229,7 @@ export class UsageGraph {
       if (prev && prev.pts.some((p) => p.pct >= GHOST_MIN_PEAK_PCT)) {
         const shift = resetMs === null ? 0 : end - prev.resetMs;
         const ghost = prev.pts.filter((p) => p.ms + shift >= start);
-        ctx.strokeStyle = this.dim;
+        ctx.strokeStyle = this.colors.dim;
         ctx.globalAlpha = 0.3;
         ctx.lineWidth = 2 * c;
         ctx.beginPath();
@@ -240,7 +245,7 @@ export class UsageGraph {
 
     // The limit ceiling, and a thin marker at the reset time.
     if (resetMs !== null) {
-      ctx.strokeStyle = this.dim;
+      ctx.strokeStyle = this.colors.dim;
       ctx.lineWidth = c;
       ctx.beginPath();
       ctx.moveTo(x(end), y(0));
@@ -248,7 +253,7 @@ export class UsageGraph {
       ctx.stroke();
     }
     // The limit reads as a red gridline, not a frame around the panel.
-    ctx.strokeStyle = this.red;
+    ctx.strokeStyle = this.colors.red;
     ctx.globalAlpha = 0.7;
     ctx.lineWidth = c;
     ctx.beginPath();
@@ -261,9 +266,9 @@ export class UsageGraph {
     // The line's colour follows its height: green low, blending through
     // amber at the warning threshold to red at the limit threshold.
     const gradient = ctx.createLinearGradient(0, y(0), 0, y(100));
-    gradient.addColorStop(0, this.green);
-    gradient.addColorStop(AMBER_AT_PCT / 100, this.amber);
-    gradient.addColorStop(RED_AT_PCT / 100, this.red);
+    gradient.addColorStop(0, this.colors.green);
+    gradient.addColorStop(AMBER_AT_PCT / 100, this.colors.amber);
+    gradient.addColorStop(RED_AT_PCT / 100, this.colors.red);
 
     const pts = this.history.points(shown.id, start, resetMs).filter((p) => p.ms <= now);
     pts.push({ ms: Math.min(now, end), pct: win.utilization });
@@ -305,7 +310,7 @@ export class UsageGraph {
 
     // A bright "now" marker at the end of the live line.
     const cur = pts[pts.length - 1];
-    ctx.fillStyle = this.text;
+    ctx.fillStyle = this.colors.text;
     ctx.beginPath();
     ctx.arc(x(cur.ms), y(cur.pct), 2.5 * c, 0, Math.PI * 2);
     ctx.fill();
@@ -329,7 +334,7 @@ export class UsageGraph {
     const hx = Math.min(Math.max(this.hoverX, pad), w - pad);
     const t = start + ((hx - pad) / (w - 2 * pad)) * windowMs;
 
-    ctx.strokeStyle = this.dim;
+    ctx.strokeStyle = this.colors.dim;
     ctx.globalAlpha = 0.5;
     ctx.lineWidth = c;
     ctx.beginPath();
@@ -342,7 +347,7 @@ export class UsageGraph {
     const recorded = interpolate(pts, t);
     const pct = recorded ?? (proj ? interpolate(proj, t) : null);
     if (pct !== null) {
-      ctx.fillStyle = this.text;
+      ctx.fillStyle = this.colors.text;
       ctx.beginPath();
       ctx.arc(hx, y(pct), 2 * c, 0, Math.PI * 2);
       ctx.fill();
@@ -361,14 +366,14 @@ export class UsageGraph {
     ctx.textBaseline = "top";
     const tw = ctx.measureText(label).width;
     ctx.globalAlpha = 0.8;
-    ctx.fillStyle = this.bg;
+    ctx.fillStyle = this.colors.bg;
     ctx.beginPath();
     if (typeof ctx.roundRect === "function")
       ctx.roundRect(pad - 3 * c, pad, tw + 8 * c, 21 * c, 5 * c);
     else ctx.rect(pad - 3 * c, pad, tw + 8 * c, 21 * c);
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = this.text;
+    ctx.fillStyle = this.colors.text;
     ctx.fillText(label, pad + c, pad + 4 * c);
   }
 

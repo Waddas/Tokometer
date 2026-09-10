@@ -63,6 +63,9 @@ export type Size = "small" | "medium" | "large";
 /** Mirrors the Rust `TrayStyle` enum (state.rs). */
 export type TrayStyle = "ring" | "text";
 
+/** Shared widget/settings palette; mirrors the Rust `Theme` enum. */
+export type Theme = "charcoal" | "midnight" | "paper" | "mist";
+
 /** Names of the opt-in feature previews being trialled; none right now. */
 export type BetaFlag = never;
 /** Opt-in feature previews, one boolean per flag; mirrors the Rust
@@ -78,6 +81,7 @@ export interface Preferences {
   customScale: number | null;
   mascot: Mascot;
   trayStyle: TrayStyle;
+  theme: Theme;
   /** Which weekdays the 7-day prediction ramps, indexed Sun..Sat. */
   workDays: boolean[];
   /** Whether a failing usage endpoint may fall back to the 1-token probe. */
@@ -102,6 +106,7 @@ export const setMascot = (mascot: Mascot) => invoke<void>("set_mascot", { mascot
 export const setLayout = (layout: Layout) => invoke<void>("set_layout", { layout });
 export const setSize = (size: Size) => invoke<void>("set_size", { size });
 export const setTrayStyle = (style: TrayStyle) => invoke<void>("set_tray_style", { style });
+export const setTheme = (theme: Theme) => invoke<void>("set_theme", { theme });
 export const setWorkDays = (days: boolean[]) => invoke<void>("set_work_days", { days });
 export const setHiddenLimits = (ids: string[]) => invoke<void>("set_hidden_limits", { ids });
 export const setProbeFallback = (enabled: boolean) =>

@@ -6,6 +6,9 @@ import { Splash } from "./splash";
 import { RateTracker } from "./rate";
 import { UsageHistory } from "./history";
 import { UsageGraph } from "./graph";
+import { applyTheme, restoreTheme } from "./theme";
+
+restoreTheme();
 
 const appWindow = getCurrentWindow();
 
@@ -364,6 +367,7 @@ if (import.meta.env.DEV) {
   });
 }
 void api.onStateChange((s) => {
+  applyTheme(s.theme);
   pinned = s.pin;
   renderPin();
   applyLayout(s.layout);
@@ -375,6 +379,7 @@ void api.onStateChange((s) => {
 });
 
 void api.getState().then((st) => {
+  applyTheme(st.theme);
   pinned = st.pin;
   renderPin();
   applyLayout(st.layout);

@@ -177,6 +177,7 @@ pub fn emit_state(app: &AppHandle) {
             "customScale": s.custom_scale,
             "mascot": s.mascot,
             "trayStyle": s.tray_style,
+            "theme": s.theme,
             "workDays": s.work_days,
             "probeFallback": s.probe_fallback,
             "hiddenLimits": s.hidden_limits,

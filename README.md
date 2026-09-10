@@ -37,6 +37,9 @@
   you don't want it.
 - **Six layouts** — mascot/graph beside, above, or below the tiles, or tiles
   only — all in a proper settings window.
+- **Four themes** — Charcoal (default), Midnight, warm Paper, and cool Mist.
+  Choose one in Settings → Appearance; it applies to both windows and is
+  remembered between launches.
 
 ## Showcase
 

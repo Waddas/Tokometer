@@ -7,6 +7,9 @@ import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./api";
 import { parseReleaseNotes } from "./release-notes";
+import { applyTheme, restoreTheme, THEMES } from "./theme";
+
+restoreTheme();
 
 const LAYOUTS: [api.Layout, string][] = [
   ["mascot-left", "Display left"],
@@ -52,12 +55,16 @@ function optionGroup<T extends string>(
   for (const [value, label] of options) {
     const btn = document.createElement("button");
     btn.textContent = label;
+    btn.setAttribute("aria-pressed", "false");
     btn.addEventListener("click", () => pick(value));
     buttons.set(value, btn);
     container.appendChild(btn);
   }
   return (selected) => {
-    for (const [value, btn] of buttons) btn.classList.toggle("selected", value === selected);
+    for (const [value, btn] of buttons) {
+      btn.classList.toggle("selected", value === selected);
+      btn.setAttribute("aria-pressed", String(value === selected));
+    }
   };
 }
 
@@ -65,6 +72,30 @@ const markLayout = optionGroup("opt-layout", LAYOUTS, (l) => void api.setLayout(
 const markSize = optionGroup("opt-size", SIZES, (s) => void api.setSize(s));
 const markMascot = optionGroup("opt-mascot", MASCOTS, (m) => void api.setMascot(m));
 const markTray = optionGroup("opt-tray", TRAY_STYLES, (t) => void api.setTrayStyle(t));
+const markTheme = optionGroup("opt-theme", THEMES, (t) => void api.setTheme(t));
+
+// Each preview uses the real palette tokens, independent of the selected theme.
+for (const [i, [theme, name]] of THEMES.entries()) {
+  const button = document.getElementById("opt-theme")!.children[i];
+  const preview = document.createElement("span");
+  preview.className = "theme-preview";
+  preview.dataset.theme = theme;
+  preview.setAttribute("aria-hidden", "true");
+  preview.innerHTML = `<svg viewBox="0 0 80 40" fill="none">
+    <path class="preview-grid" d="M8 12H72M8 24H72M8 36H72" />
+    <path class="preview-line" d="M8 33L21 30L31 30L45 21L55 18L72 8" />
+  </svg><span class="preview-value">42<span>%</span></span>`;
+  const label = document.createElement("span");
+  label.className = "theme-name";
+  label.textContent = name;
+  if (theme === "charcoal") {
+    const badge = document.createElement("span");
+    badge.className = "theme-default";
+    badge.textContent = "Default";
+    label.appendChild(badge);
+  }
+  button.replaceChildren(preview, label);
+}
 
 const sizeHint = document.getElementById("size-hint")!;
 const pinBox = document.getElementById("pin") as HTMLInputElement;
@@ -143,6 +174,8 @@ function renderLimits() {
 }
 
 function render(prefs: api.Preferences) {
+  applyTheme(prefs.theme);
+  markTheme(prefs.theme);
   markLayout(prefs.layout);
   // A free-resized widget matches no preset; say what it is instead.
   markSize(prefs.customScale === null ? prefs.size : null);

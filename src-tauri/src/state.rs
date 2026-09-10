@@ -178,6 +178,52 @@ impl TrayStyle {
     }
 }
 
+/// Shared appearance for the widget and settings window.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Theme {
+    #[default]
+    Charcoal,
+    Midnight,
+    Paper,
+    Mist,
+}
+
+impl Theme {
+    pub const ALL: [Theme; 4] = [Theme::Charcoal, Theme::Midnight, Theme::Paper, Theme::Mist];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Theme::Charcoal => "charcoal",
+            Theme::Midnight => "midnight",
+            Theme::Paper => "paper",
+            Theme::Mist => "mist",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Theme> {
+        Self::ALL.into_iter().find(|theme| theme.id() == id)
+    }
+
+    pub fn window_theme(self) -> tauri::Theme {
+        match self {
+            Theme::Charcoal | Theme::Midnight => tauri::Theme::Dark,
+            Theme::Paper | Theme::Mist => tauri::Theme::Light,
+        }
+    }
+
+    /// Native background before the settings webview paints; matches --bg in theme.css.
+    pub fn background_color(self) -> tauri::window::Color {
+        let (r, g, b) = match self {
+            Theme::Charcoal => (0x14, 0x15, 0x16),
+            Theme::Midnight => (0x05, 0x05, 0x05),
+            Theme::Paper => (0xf0, 0xec, 0xe4),
+            Theme::Mist => (0xe9, 0xef, 0xf4),
+        };
+        tauri::window::Color(r, g, b, 255)
+    }
+}
+
 /// Which weekdays count as "work days", indexed Sun..Sat to match the
 /// frontend's `Date.getDay()`. Unchecked days hold the 7-day prediction flat
 /// (no usage expected), so the dotted line doesn't extrapolate across them.
@@ -207,6 +253,7 @@ pub struct PersistedState {
     pub custom_scale: Option<f64>,
     pub mascot: Mascot,
     pub tray_style: TrayStyle,
+    pub theme: Theme,
     /// All-true by default; a plain derive would flatten the whole prediction.
     #[serde(default = "all_work_days")]
     pub work_days: [bool; 7],
@@ -247,6 +294,7 @@ impl Default for PersistedState {
             custom_scale: None,
             mascot: Mascot::default(),
             tray_style: TrayStyle::default(),
+            theme: Theme::default(),
             work_days: all_work_days(),
             probe_fallback: true,
             hidden_limits: Vec::new(),
@@ -466,6 +514,38 @@ mod tests {
     }
 
     #[test]
+    fn every_theme_survives_a_state_save_and_reload() {
+        for theme in Theme::ALL {
+            assert_eq!(Theme::from_id(theme.id()), Some(theme));
+            let state = PersistedState {
+                theme,
+                pin: true,
+                layout: Layout::TilesRow,
+                ..Default::default()
+            };
+            let json = serde_json::to_string(&state).unwrap();
+            let restored: PersistedState = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored.theme, theme);
+            assert!(restored.pin);
+            assert_eq!(restored.layout, Layout::TilesRow);
+        }
+        assert_eq!(Theme::from_id("unknown"), None);
+    }
+
+    #[test]
+    fn upgrading_an_older_state_defaults_theme_without_resetting_preferences() {
+        let state: PersistedState = serde_json::from_str(
+            r#"{"pin":true,"layout":"tiles-column","size":"large","hiddenLimits":["weekly_all"]}"#,
+        )
+        .unwrap();
+        assert_eq!(state.theme, Theme::Charcoal);
+        assert!(state.pin);
+        assert_eq!(state.layout, Layout::TilesColumn);
+        assert_eq!(state.size, Size::Large);
+        assert_eq!(state.hidden_limits, vec!["weekly_all"]);
+    }
+
+    #[test]
     fn persisted_state_fills_missing_fields_with_defaults() {
         // The poller writes partial state early on; load() must tolerate it.
         let s: PersistedState = serde_json::from_str("{}").unwrap();
@@ -474,6 +554,7 @@ mod tests {
         assert_eq!(s.size, Size::Small);
         assert_eq!(s.mascot, Mascot::Clawd);
         assert_eq!(s.tray_style, TrayStyle::Ring);
+        assert_eq!(s.theme, Theme::Charcoal);
         // All-true, not the [false; 7] a plain field default would give —
         // otherwise an old state.json (no workDays key) flattens the prediction.
         assert_eq!(s.work_days, [true; 7]);
@@ -506,6 +587,7 @@ mod tests {
             custom_scale: Some(1.1),
             mascot: Mascot::Axolotl,
             tray_style: TrayStyle::Text,
+            theme: Theme::Paper,
             work_days: [true, false, true, true, true, true, false],
             probe_fallback: true,
             hidden_limits: vec!["weekly_scoped:fable".into()],
@@ -524,6 +606,7 @@ mod tests {
         assert_eq!(back.custom_scale, original.custom_scale);
         assert_eq!(back.mascot, original.mascot);
         assert_eq!(back.tray_style, original.tray_style);
+        assert_eq!(back.theme, original.theme);
         assert_eq!(back.work_days, original.work_days);
         assert_eq!(back.probe_fallback, original.probe_fallback);
         assert_eq!(back.window.unwrap().x, 12.0);

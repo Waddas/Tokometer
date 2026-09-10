@@ -1,0 +1,93 @@
+/* Shared surfaces and colours keep both windows feeling like one app. */
+@font-face {
+  font-family: "Grotesk";
+  src: url("./fonts/SpaceGrotesk-Subset.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root,
+[data-theme="charcoal"] {
+  color-scheme: dark;
+  --bg: #141516;
+  --panel: #202223;
+  --text: #f1f0ed;
+  --dim: #a9adaa;
+  --accent: #e2a18a;
+  --accent-soft: #342b28;
+  --accent-border: #806359;
+  --green: #a3bc90;
+  --amber: #e3b078;
+  --red: #e68c83;
+  --track: #2e3232;
+  --border: #343838;
+  --tile-border: #ffffff05;
+  --on-accent: #141516;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* The original black-and-warm-grey palette, with clearer status colours. */
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --bg: #050505;
+  --panel: #1c1c1b;
+  --text: #faf9f5;
+  --dim: #aeada5;
+  --accent: #d98c70;
+  --accent-soft: #30231e;
+  --accent-border: #805744;
+  --green: #9aaf7d;
+  --amber: #dca068;
+  --red: #e17d72;
+  --track: #2b2b28;
+  --border: #33332f;
+  --tile-border: #ffffff05;
+  --on-accent: #050505;
+}
+
+[data-theme="paper"] {
+  color-scheme: light;
+  --bg: #f0ece4;
+  --panel: #fffcf6;
+  --text: #35332d;
+  --dim: #736d61;
+  --accent: #985138;
+  --accent-soft: #f5e4da;
+  --accent-border: #c19580;
+  --green: #4c713e;
+  --amber: #946217;
+  --red: #b1433a;
+  --track: #e7e1d6;
+  --border: #d6cebf;
+  --tile-border: #51432812;
+  --on-accent: #ffffff;
+}
+
+[data-theme="mist"] {
+  color-scheme: light;
+  --bg: #e9eff4;
+  --panel: #f9fbfd;
+  --text: #293744;
+  --dim: #637381;
+  --accent: #356487;
+  --accent-soft: #dfebf4;
+  --accent-border: #8faec4;
+  --green: #34725c;
+  --amber: #95601e;
+  --red: #b33f50;
+  --track: #e0e7ed;
+  --border: #cbd6df;
+  --tile-border: #274b6a12;
+  --on-accent: #ffffff;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+  }
+}
