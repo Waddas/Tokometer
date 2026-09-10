@@ -74,6 +74,33 @@ const markMascot = optionGroup("opt-mascot", MASCOTS, (m) => void api.setMascot(
 const markTray = optionGroup("opt-tray", TRAY_STYLES, (t) => void api.setTrayStyle(t));
 const markTheme = optionGroup("opt-theme", THEMES, (t) => void api.setTheme(t));
 
+// Compact diagrams show the display and usage tiles in their actual positions.
+for (const [i, [layout, name]] of LAYOUTS.entries()) {
+  const button = document.getElementById("opt-layout")!.children[i];
+  const preview = document.createElement("span");
+  preview.className = "layout-preview";
+  preview.setAttribute("aria-hidden", "true");
+  const miniature = document.createElement("span");
+  miniature.className = "layout-mini";
+  miniature.dataset.layout = layout;
+  if (!layout.startsWith("tiles-")) {
+    miniature.innerHTML = `<span class="layout-display"><svg viewBox="0 0 24 16" fill="none">
+      <path d="M3 12L8 10L12 10L17 6L21 4" />
+    </svg></span>`;
+  }
+  for (let tile = 0; tile < 2; tile++) {
+    const block = document.createElement("span");
+    block.className = "layout-tile";
+    miniature.appendChild(block);
+  }
+  preview.appendChild(miniature);
+  const label = document.createElement("span");
+  label.textContent = name.replace("Tiles only (wide)", "Tiles wide").replace("Tiles only (tall)", "Tiles tall");
+  button.setAttribute("aria-label", name);
+  button.setAttribute("title", name);
+  button.replaceChildren(preview, label);
+}
+
 // Each preview uses the real palette tokens, independent of the selected theme.
 for (const [i, [theme, name]] of THEMES.entries()) {
   const button = document.getElementById("opt-theme")!.children[i];
