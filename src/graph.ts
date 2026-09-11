@@ -1,6 +1,6 @@
 // Usage-over-time graph, shown in place of the mascot: history line coloured
-// by the usage thresholds, a dotted prediction at the current rate, a red bar
-// at the limit, and a faint ghost of the previous window. Right-clicking it
+// by the usage thresholds, a dotted prediction at the current rate, a quiet
+// limit ceiling, and a faint ghost of the previous window. Right-clicking it
 // cycles through the limit windows the tiles show (5h, 7d, and any scoped
 // model limit); hovering reads off the time and percentage under the cursor.
 import {
@@ -103,6 +103,8 @@ export class UsageGraph {
       const i = windows.findIndex((w) => w.id === this.current().id);
       this.windowId = windows[(i + 1) % windows.length].id;
       localStorage.setItem(WINDOW_KEY, this.windowId);
+      // Reveal the newly selected window's label until the cursor moves again.
+      this.hoverX = null;
       this.draw();
     });
     // offsetX is in the element's own space, which the real-pixel layout
@@ -243,18 +245,43 @@ export class UsageGraph {
       }
     }
 
-    // The limit ceiling, and a thin marker at the reset time.
+    const pts = win
+      ? this.history.points(shown.id, start, resetMs).filter((p) => p.ms <= now)
+      : [];
+    if (win) pts.push({ ms: Math.min(now, end), pct: win.utilization });
+
+    let proj: Pt[] | null = null;
+    const slope = trendSlope(pts, span.trendMs, now);
+    if (win?.resetAt && slope !== null && now < end) {
+      const rise = Math.max(0, slope);
+      // The work-day mask only shapes multi-day windows; the 5h projection is
+      // intra-day, so it always ramps.
+      const isWorkDay =
+        span.windowMs > DAY_MS
+          ? (ms: number) => this.workDays[new Date(ms).getDay()] !== false
+          : () => true;
+      proj = projectUsage(now, end, win.utilization, rise, isWorkDay);
+    }
+
+    // A short tick marks the reset without framing the right edge.
     if (resetMs !== null) {
+      ctx.save();
       ctx.strokeStyle = this.colors.dim;
+      ctx.globalAlpha = 0.5;
       ctx.lineWidth = c;
       ctx.beginPath();
-      ctx.moveTo(x(end), y(0));
-      ctx.lineTo(x(end), y(100));
+      ctx.moveTo(x(end), y(0) - 4 * c);
+      ctx.lineTo(x(end), y(0));
       ctx.stroke();
+      ctx.restore();
     }
-    // The limit reads as a red gridline, not a frame around the panel.
-    ctx.strokeStyle = this.colors.red;
-    ctx.globalAlpha = 0.7;
+    // Keep the ceiling neutral until the current reading or forecast reaches
+    // the same warning threshold that turns the usage tile red.
+    const nearLimit =
+      (win?.utilization ?? 0) >= RED_AT_PCT ||
+      (proj?.some((p) => p.pct >= RED_AT_PCT) ?? false);
+    ctx.strokeStyle = nearLimit ? this.colors.red : this.colors.track;
+    ctx.globalAlpha = nearLimit ? 0.45 : 0.7;
     ctx.lineWidth = c;
     ctx.beginPath();
     ctx.moveTo(pad, y(100));
@@ -269,9 +296,6 @@ export class UsageGraph {
     gradient.addColorStop(0, this.colors.green);
     gradient.addColorStop(AMBER_AT_PCT / 100, this.colors.amber);
     gradient.addColorStop(RED_AT_PCT / 100, this.colors.red);
-
-    const pts = this.history.points(shown.id, start, resetMs).filter((p) => p.ms <= now);
-    pts.push({ ms: Math.min(now, end), pct: win.utilization });
 
     // Soft area fill anchors the line to the baseline.
     if (pts.length >= 2) {
@@ -292,20 +316,13 @@ export class UsageGraph {
     ctx.lineWidth = 3 * c;
     this.strokePolyline(ctx, pts, gradient, x, y);
 
-    let proj: Pt[] | null = null;
-    const slope = trendSlope(pts, span.trendMs, now);
-    if (win.resetAt && slope !== null && now < end) {
-      const rise = Math.max(0, slope);
-      // The work-day mask only shapes multi-day windows; the 5h projection is
-      // intra-day, so it always ramps.
-      const isWorkDay =
-        span.windowMs > DAY_MS
-          ? (ms: number) => this.workDays[new Date(ms).getDay()] !== false
-          : () => true;
-      proj = projectUsage(now, end, win.utilization, rise, isWorkDay);
+    if (proj) {
+      ctx.save();
+      ctx.lineWidth = 2 * c;
+      ctx.globalAlpha = 0.8;
       ctx.setLineDash([c, 6 * c]);
       this.strokePolyline(ctx, proj, gradient, x, y);
-      ctx.setLineDash([]);
+      ctx.restore();
     }
 
     // A bright "now" marker at the end of the live line.
