@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/Waddas/Tokometer/actions/workflows/ci.yml/badge.svg)](https://github.com/Waddas/Tokometer/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Waddas/Tokometer?display_name=tag&sort=semver)](https://github.com/Waddas/Tokometer/releases/latest)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app/)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/Waddas?logo=githubsponsors&color=EA4AAA)](https://github.com/sponsors/Waddas)
@@ -193,7 +193,7 @@ PR conventions, and please follow the
 
 ## License
 
-[MIT](LICENSE).
+[GPL-3.0-or-later](LICENSE).
 
 The bundled font and pixel-art are redistributed under their own permissive
 licenses — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
