@@ -165,6 +165,7 @@ pub fn run() {
             commands::set_layout,
             commands::set_size,
             commands::set_tray_style,
+            commands::set_theme,
             commands::set_work_days,
             commands::set_hidden_limits,
             commands::set_probe_fallback,

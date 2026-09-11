@@ -4,7 +4,7 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::history::{HistoryLog, RawSample, Sample};
 use crate::poller::RefreshSignal;
-use crate::state::{AppState, BetaFeatures, Layout, Mascot, Size, TrayStyle};
+use crate::state::{AppState, BetaFeatures, Layout, Mascot, Size, Theme, TrayStyle};
 
 #[tauri::command]
 pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
@@ -16,6 +16,7 @@ pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
         "customScale": s.custom_scale,
         "mascot": s.mascot,
         "trayStyle": s.tray_style,
+        "theme": s.theme,
         "workDays": s.work_days,
         "probeFallback": s.probe_fallback,
         "hiddenLimits": s.hidden_limits,
@@ -60,6 +61,20 @@ pub fn set_tray_style(app: AppHandle, style: String) {
     if let Some(style) = TrayStyle::from_id(&style) {
         apply_tray_style(&app, style);
     }
+}
+
+#[tauri::command]
+pub fn set_theme(app: AppHandle, theme: String) {
+    let Some(theme) = Theme::from_id(&theme) else {
+        return;
+    };
+    app.state::<AppState>().0.lock().unwrap().theme = theme;
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.set_theme(Some(theme.window_theme()));
+        let _ = win.set_background_color(Some(theme.background_color()));
+    }
+    crate::state::save(&app);
+    crate::tray::emit_state(&app);
 }
 
 #[tauri::command]
@@ -192,6 +207,7 @@ pub fn show_settings(app: &AppHandle) {
     // the event loop safely on every platform.
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
+        let theme = app.state::<AppState>().0.lock().unwrap().theme;
         let _ = tauri::WebviewWindowBuilder::new(
             &app,
             "settings",
@@ -202,12 +218,13 @@ pub fn show_settings(app: &AppHandle) {
         .resizable(false)
         .maximizable(false)
         .minimizable(false)
-        // Born hidden, and black underneath: the page shows itself once its
+        // Born hidden, with the theme underneath: the page shows itself once its
         // first render has landed (settings.ts), but the webview can still
         // surface before its first paint — a native background in the page's
         // colour keeps that moment invisible instead of a white flash.
         .visible(false)
-        .background_color(tauri::window::Color(0, 0, 0, 255))
+        .theme(Some(theme.window_theme()))
+        .background_color(theme.background_color())
         .build();
     });
 }
