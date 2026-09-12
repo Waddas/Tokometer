@@ -11,7 +11,7 @@ A lightweight desktop widget for tracking usage limits, reset times, and trends 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app/)
 
-<img src="docs/hero.png" alt="Tokometer in the default Charcoal theme, showing a usage graph, reset countdowns, and Claude and Codex switching buttons" width="440" />
+<img src="docs/hero.png" alt="Small Tokometer widget in Charcoal with a usage graph and reset countdowns" width="188" />
 
 [Download](https://github.com/Waddas/Tokometer/releases/latest) · [Getting started](#getting-started) · [Development](#development) · [Report an issue](https://github.com/Waddas/Tokometer/issues)
 
@@ -28,6 +28,16 @@ Tokometer keeps your coding-agent usage visible in a compact, resizable widget. 
 - **Controls where you want them.** Position the tools and provider buttons independently on any side. Buttons wrap on narrow widgets and stack when they share a side.
 - **Desktop integration.** Pin the widget above other windows, hide it to the tray, choose a ring or percentage tray indicator, and optionally start at login.
 - **Four themes.** Charcoal is the default, alongside Midnight, Paper, and Mist. The widget and settings window share your chosen theme.
+
+## Layouts
+
+Use the graph beside your limits, as shown above, or choose a layout that fits your workspace. These screenshots show sample usage in **Charcoal** at the **Small** size preset, with controls hidden.
+
+| Graph above | Tiles wide | Tiles tall |
+| :---: | :---: | :---: |
+| <img src="docs/layout-graph-top.png" alt="Small Charcoal widget with the usage graph above two limit tiles" width="159" /> | <img src="docs/layout-tiles-wide.png" alt="Small Charcoal widget with usage tiles side by side" width="159" /> | <img src="docs/layout-tiles-tall.png" alt="Small Charcoal widget with stacked usage tiles" width="86" /> |
+
+The graph can also sit to the right or below the tiles. Tool and provider buttons can each be placed on any side, independently of the layout.
 
 ## Install
 
@@ -68,6 +78,12 @@ Codex's integration uses local files and HTTPS, with no macOS-only dependency. O
 ## Controls
 
 Hover over the widget to reveal its buttons. The grab handle is separated from the other tools; when controls wrap, grab and close stay at the top corners and the remaining rows are centered.
+
+<p align="center">
+  <img src="docs/widget-controls.png" alt="Medium Charcoal widget with the grab handle and tool buttons above, and Claude and Codex buttons on the right" width="314" />
+  <br />
+  <sub>Medium size, with hover controls visible.</sub>
+</p>
 
 | Action | Result |
 | --- | --- |
