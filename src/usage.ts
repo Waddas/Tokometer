@@ -23,7 +23,7 @@ function formatReset(mins: number): string {
  *  contain a comma — see `slug` in usage.rs). Mirrors graph.ts's mode key. */
 const INFO_KEY = "tile-info-view";
 
-/** Hover tooltip: which limit, when it resets, and whether the value is a
+/** Accessible description: which limit, when it resets, and whether the value is a
  *  carried-over one rather than this poll's. */
 function infoText(label: string, reset: string, stale: boolean): string {
   const text = reset === "---" ? label : `${label} — resets in ${reset}`;
@@ -161,7 +161,7 @@ export class UsageRenderer {
       els.pct.style.color = this.stale || w.stale ? "var(--dim)" : pctColor(pct);
     }
     els.reset.textContent = reset;
-    els.root.title = infoText(els.label, reset, w?.stale ?? false);
+    els.root.setAttribute("aria-label", infoText(els.label, reset, w?.stale ?? false));
   }
 
   private resetText(w: LimitWindow): string {
@@ -176,7 +176,7 @@ export class UsageRenderer {
       if (!els) continue;
       const reset = this.resetText(w);
       els.reset.textContent = reset;
-      els.root.title = infoText(els.label, reset, w.stale ?? false);
+      els.root.setAttribute("aria-label", infoText(els.label, reset, w.stale ?? false));
     }
   }
 }

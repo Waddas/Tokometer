@@ -171,6 +171,11 @@ pub fn emit_state(app: &AppHandle) {
     let payload = {
         let s = state.0.lock().unwrap();
         serde_json::json!({
+            "controlsSide": s.controls_side,
+            "providersSide": s.providers_side,
+            "geometry": s.geometry(),
+            "provider": s.provider,
+        "availableProviders": s.available_providers,
             "pin": s.pin,
             "layout": s.layout,
             "size": s.size,
@@ -206,9 +211,18 @@ pub fn refresh(app: &AppHandle) {
                 .last_usage
                 .clone()
         });
-    if let Some(snapshot) = snapshot {
-        update(app, &snapshot);
-    }
+    let snapshot = snapshot.unwrap_or_else(|| {
+        let provider = app
+            .state::<crate::state::AppState>()
+            .0
+            .lock()
+            .unwrap()
+            .provider;
+        let mut s = UsageSnapshot::error(format!("Loading {} usage…", provider.label()));
+        s.provider = provider;
+        s
+    });
+    update(app, &snapshot);
 }
 
 /// Reflect the latest poll result in the tray: the 5h percentage (or a flat
@@ -267,8 +281,9 @@ pub fn update(app: &AppHandle, snapshot: &UsageSnapshot) {
     };
     // Re-assert the template flag each time: plain set_icon would clear it.
     let _ = handles.tray.set_icon_with_as_template(Some(icon), template);
-    let _ = handles
-        .tray
-        .set_tooltip(Some(format!("Tokometer — {line}")));
+    let _ = handles.tray.set_tooltip(Some(format!(
+        "Tokometer — {} — {line}",
+        snapshot.provider.label()
+    )));
     let _ = handles.status_item.set_text(&line);
 }

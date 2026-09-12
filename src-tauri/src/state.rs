@@ -6,6 +6,28 @@ use tauri::{AppHandle, Manager};
 
 use crate::usage::UsageSnapshot;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Provider {
+    #[default]
+    Claude,
+    Codex,
+}
+impl Provider {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Codex => "codex",
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Claude => "Claude",
+            Self::Codex => "Codex",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct WindowPos {
     pub x: f64,
@@ -56,7 +78,7 @@ impl Layout {
     /// The layout's design-space dimensions (geometry in styles.css). Fixed:
     /// however many limits the API reports, the tiles share the layout's tile
     /// band, so the window never resizes itself around the data.
-    fn design_size(self) -> (f64, f64) {
+    pub(crate) fn design_size(self) -> (f64, f64) {
         match self {
             Layout::MascotLeft | Layout::MascotRight => (282.0, 168.0),
             Layout::MascotTop | Layout::MascotBottom => (238.0, 243.0),
@@ -65,13 +87,16 @@ impl Layout {
         }
     }
 
-    /// Logical window size: the layout's design space scaled by `scale`, plus
-    /// the 28px strip above the widget that hosts the hover controls. The
-    /// frontend recomputes its scale (`--chrome`) from the resized width.
+    /// Default toolbar placement, for the layout geometry regression checks.
+    #[cfg(test)]
     pub fn window_size(self, scale: f64) -> (f64, f64) {
-        const CONTROLS_STRIP: f64 = 28.0;
-        let (w, h) = self.design_size();
-        (w * scale, h * scale + CONTROLS_STRIP)
+        let g = crate::chrome::Geometry::new(
+            self,
+            scale,
+            crate::chrome::Side::Top,
+            crate::chrome::Side::Right,
+        );
+        (g.width, g.height)
     }
 
     /// The free-resize scale a window of logical width `width` implies.
@@ -241,9 +266,37 @@ pub fn all_work_days() -> [bool; 7] {
 #[serde(rename_all = "camelCase", default)]
 pub struct BetaFeatures {}
 
+#[derive(Debug, Clone, Copy, Default, Serialize)]
+pub struct ProviderAvailability {
+    pub claude: bool,
+    pub codex: bool,
+}
+impl ProviderAvailability {
+    pub fn both(self) -> bool { self.claude && self.codex }
+    pub fn allows(self, provider: Provider) -> bool {
+        match provider { Provider::Claude => self.claude, Provider::Codex => self.codex }
+    }
+    pub fn update(&mut self, provider: Provider, available: bool) -> bool {
+        let value = match provider { Provider::Claude => &mut self.claude, Provider::Codex => &mut self.codex };
+        let changed = *value != available;
+        *value = available;
+        changed
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PersistedState {
+    pub controls_side: crate::chrome::Side,
+    pub providers_side: crate::chrome::Side,
+    pub provider: Provider,
+    pub provider_hidden_limits: std::collections::BTreeMap<String, Vec<String>>,
+    /// Invalidates polls started before a provider switch, including A → B → A.
+    #[serde(skip)]
+    pub provider_revision: u64,
+    /// Local provider presence, rechecked each launch and refresh.
+    #[serde(skip)]
+    pub available_providers: ProviderAvailability,
     /// Logical (DPI-independent) window position.
     pub window: Option<WindowPos>,
     pub pin: bool,
@@ -274,6 +327,36 @@ pub struct PersistedState {
 }
 
 impl PersistedState {
+    pub fn geometry(&self) -> crate::chrome::Geometry {
+        crate::chrome::Geometry::with_providers(
+            self.layout,
+            self.effective_scale(),
+            self.controls_side,
+            self.providers_side,
+            self.available_providers.both(),
+        )
+    }
+    pub fn switch_provider(&mut self, provider: Provider) -> bool {
+        if self.provider == provider {
+            return false;
+        }
+        self.provider_hidden_limits
+            .insert(self.provider.id().into(), self.hidden_limits.clone());
+        self.hidden_limits = self
+            .provider_hidden_limits
+            .get(provider.id())
+            .cloned()
+            .unwrap_or_default();
+        self.provider = provider;
+        self.provider_revision += 1;
+        self.last_usage = None;
+        true
+    }
+
+    pub fn accepts_poll(&self, provider: Provider, revision: u64) -> bool {
+        self.provider == provider && self.provider_revision == revision
+    }
+
     /// The scale the window actually renders at.
     pub fn effective_scale(&self) -> f64 {
         self.custom_scale
@@ -287,6 +370,12 @@ impl PersistedState {
 impl Default for PersistedState {
     fn default() -> Self {
         Self {
+            controls_side: crate::chrome::Side::Top,
+            providers_side: crate::chrome::provider_side(),
+            provider: Provider::default(),
+            provider_hidden_limits: Default::default(),
+            provider_revision: 0,
+            available_providers: ProviderAvailability::default(),
             window: None,
             pin: false,
             layout: Layout::default(),
@@ -353,6 +442,47 @@ pub fn write_atomic(path: &Path, contents: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn availability_requires_local_detection_for_each_provider_and_is_not_persisted() {
+        let mut state = PersistedState::default();
+        assert!(!state.available_providers.allows(Provider::Claude));
+        assert!(!state.available_providers.both());
+        assert!(state.available_providers.update(Provider::Codex, true));
+        assert!(state.available_providers.allows(Provider::Codex));
+        assert!(!state.available_providers.both());
+        state.available_providers.update(Provider::Claude, true);
+        assert!(state.available_providers.both());
+        let saved = serde_json::to_string(&state).unwrap();
+        let restored: PersistedState = serde_json::from_str(&saved).unwrap();
+        assert!(!restored.available_providers.both());
+        state.available_providers.update(Provider::Claude, false);
+        assert!(!state.available_providers.both());
+    }
+
+    #[test]
+    fn switching_provider_invalidates_in_flight_polls_and_restores_hidden_limits() {
+        let mut state: PersistedState = serde_json::from_str(
+            r#"{"hiddenLimits":["weekly_all"],"lastUsage":{"status":"ok","source":"oauth","fetchedAt":1,"windows":[],"error":null}}"#,
+        ).unwrap();
+        assert_eq!(state.provider, Provider::Claude);
+        assert_eq!(state.last_usage.as_ref().unwrap().scope, "claude");
+        let original_revision = state.provider_revision;
+        assert!(state.switch_provider(Provider::Codex));
+        assert!(state.last_usage.is_none());
+        assert!(state.hidden_limits.is_empty());
+        assert!(!state.accepts_poll(Provider::Claude, original_revision));
+        state.hidden_limits = vec!["session".into()];
+        assert!(state.switch_provider(Provider::Claude));
+        assert_eq!(state.hidden_limits, ["weekly_all"]);
+        // Switching back cannot make the original Claude request valid again.
+        assert!(!state.accepts_poll(Provider::Claude, original_revision));
+        assert!(!state.switch_provider(Provider::Claude));
+        let json = serde_json::to_string(&state).unwrap();
+        let mut restored: PersistedState = serde_json::from_str(&json).unwrap();
+        restored.switch_provider(Provider::Codex);
+        assert_eq!(restored.hidden_limits, ["session"]);
+    }
 
     #[test]
     fn id_round_trips_through_from_id_for_every_layout() {
@@ -431,14 +561,14 @@ mod tests {
         // The original window was the design space x 2/3; Small must match it
         // so existing users see no change after upgrading.
         let (w, h) = Layout::MascotLeft.window_size(Size::Small.scale());
-        assert_eq!((w, h), (188.0, 112.0 + 28.0));
+        assert_eq!((w, h), (188.0 + 32.0, 112.0 + 32.0));
     }
 
     #[test]
     fn scale_for_width_inverts_window_size_within_bounds() {
         for layout in Layout::ALL {
             let (w, _) = layout.window_size(1.2);
-            assert!((layout.scale_for_width(w) - 1.2).abs() < 1e-9);
+            assert!((layout.scale_for_width(w - 32.0) - 1.2).abs() < 1e-9);
         }
         // Out-of-range widths clamp instead of producing absurd windows.
         assert_eq!(Layout::TilesRow.scale_for_width(10.0), MIN_SCALE);
@@ -580,6 +710,12 @@ mod tests {
     #[test]
     fn persisted_state_round_trips_through_json() {
         let original = PersistedState {
+            controls_side: crate::chrome::Side::Top,
+            providers_side: crate::chrome::provider_side(),
+            provider: Provider::default(),
+            provider_hidden_limits: Default::default(),
+            provider_revision: 0,
+            available_providers: ProviderAvailability::default(),
             window: Some(WindowPos { x: 12.0, y: 34.0 }),
             pin: true,
             layout: Layout::TilesRow,

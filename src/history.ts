@@ -19,6 +19,23 @@ const RESET_TOLERANCE_MS = 90_000;
 
 export class UsageHistory {
   private samples: HistorySample[] = [];
+  private scope = "claude";
+
+  selectScope(scope: string): boolean {
+    if (scope === this.scope) return false;
+    this.scope = scope;
+    this.samples = [];
+    return true;
+  }
+
+  /** Reject a late load for another account, preserving live samples received while loading. */
+  loadForScope(scope: string, samples: HistorySample[]): void {
+    if (scope !== this.scope) return;
+    const merged = new Map(samples.map((s) => [s.ms, s]));
+    for (const s of this.samples) merged.set(s.ms, s);
+    this.samples = [...merged.values()].sort((a, b) => a.ms - b.ms);
+  }
+
 
   /** Replace the log with the backend's (startup, or after migration). */
   load(samples: HistorySample[]): void {
@@ -27,12 +44,13 @@ export class UsageHistory {
 
   /** Record a snapshot at its fetch time; near-duplicates are dropped. */
   sample(s: UsageSnapshot, now = Date.now()): void {
-    if (s.status !== "ok") return;
+    if (s.status !== "ok" || (s.scope ?? "claude") !== this.scope) return;
     const ms = s.fetchedAt || now;
     const last = this.samples[this.samples.length - 1];
     if (last && ms - last.ms < MIN_GAP_MS) return;
     const w: HistorySample["w"] = {};
     for (const win of s.windows) {
+      if (win.stale) continue;
       w[win.id] = { pct: win.utilization, reset: win.resetAt != null ? win.resetAt * 1000 : null };
     }
     this.samples.push({ ms, w });

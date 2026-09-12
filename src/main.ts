@@ -22,7 +22,7 @@ const btnHide = document.getElementById("btn-hide")!;
 const statusEl = document.getElementById("status")!;
 
 const splash = new Splash(mascotCanvas);
-const rate = new RateTracker();
+let rate = new RateTracker();
 const history = new UsageHistory();
 
 const graph = new UsageGraph(document.getElementById("graph") as HTMLCanvasElement, history);
@@ -43,9 +43,40 @@ const DESIGN_WIDTH: Record<api.Layout, number> = {
 };
 
 let layout: api.Layout = "mascot-left";
+let geometry: api.ChromeGeometry | null = null;
+
+function applyGeometry(g: api.ChromeGeometry | null | undefined) {
+  if (!g) return;
+  geometry = g;
+  const place = (element: HTMLElement, rect: api.ChromeRect) => {
+    Object.assign(element.style, { left: `${rect.x}px`, top: `${rect.y}px`,
+      width: `${rect.width}px`, height: `${rect.height}px` });
+  };
+  place(root, g.widget);
+  for (const [id, bar] of [["controls", g.controls], ["provider-controls", g.providers]] as const) {
+    const element = document.getElementById(id)!;
+    place(element, bar.rect);
+    element.style.setProperty("--columns", String(bar.columns));
+    element.style.setProperty("--rows", String(bar.rows));
+    element.classList.toggle("vertical", bar.vertical);
+    element.hidden = bar.buttons.length === 0;
+    [...element.querySelectorAll<HTMLButtonElement>(":scope > button")].forEach((button, i) => {
+      if (bar.buttons[i]) place(button, bar.buttons[i]);
+    });
+  }
+  updateScale();
+  graph.redraw();
+}
+let resizeRequest = 0;
+function resizeWidget(width: number, commit: boolean) {
+  const request = ++resizeRequest;
+  void api.resizeWidget(width, commit).then((g) => {
+    if (request === resizeRequest) applyGeometry(g);
+  });
+}
 
 function updateScale() {
-  const scale = window.innerWidth / DESIGN_WIDTH[layout];
+  const scale = (geometry?.widget.width ?? root.clientWidth) / DESIGN_WIDTH[layout];
   document.documentElement.style.setProperty("--chrome", String(Math.min(1, scale)));
 }
 window.addEventListener("resize", updateScale);
@@ -86,7 +117,7 @@ grip.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
   grip.setPointerCapture(e.pointerId);
   const startX = e.screenX; // screen coords: stable while the window resizes
-  const startWidth = window.innerWidth;
+  const startWidth = root.clientWidth;
   let width = startWidth;
   let raf = 0;
   const onMove = (ev: PointerEvent) => {
@@ -95,7 +126,7 @@ grip.addEventListener("pointerdown", (e) => {
     if (!raf) {
       raf = requestAnimationFrame(() => {
         raf = 0;
-        void api.resizeWidget(width, false);
+        resizeWidget(width, false);
       });
     }
   };
@@ -105,7 +136,7 @@ grip.addEventListener("pointerdown", (e) => {
     grip.removeEventListener("pointercancel", onUp);
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
-    void api.resizeWidget(width, true);
+    resizeWidget(width, true);
   };
   grip.addEventListener("pointermove", onMove);
   grip.addEventListener("pointerup", onUp);
@@ -185,6 +216,14 @@ btnRefresh.addEventListener("click", () => void api.refreshNow());
 btnSettings.addEventListener("click", () => void api.openSettings());
 btnHide.addEventListener("click", () => void api.toggleVisibility());
 
+const providerButtons = new Map<api.Provider, HTMLButtonElement>();
+for (const id of ["claude", "codex"] as const) {
+  const button = document.getElementById(`provider-${id}`) as HTMLButtonElement;
+  button.addEventListener("mousedown", (e) => e.stopPropagation());
+  button.addEventListener("click", () => void api.setProvider(id));
+  providerButtons.set(id, button);
+}
+
 /* ---- update available: a dot on the settings gear; settings offers the install ---- */
 const updateDot = document.getElementById("update-dot")!;
 void api.onUpdatePhase((u) => {
@@ -197,6 +236,13 @@ void api.onUpdatePhase((u) => {
 // Kept terse: the widget can be very narrow, and the raw error sits in the
 // element's tooltip for anyone who wants the details.
 function friendlyError(err: string): string {
+  if (err.startsWith("Loading")) return err;
+  if (err.startsWith("Codex login expired")) return "Open Codex to refresh your login";
+  if (err.startsWith("Codex login unavailable")) return "Sign in to Codex to start tracking";
+  if (err.startsWith("Codex requires") || err.startsWith("Codex account identity")) return "Sign in to Codex with ChatGPT";
+  if (err.startsWith("Codex usage access denied")) return "Codex usage access denied";
+  if (err.startsWith("Codex returned no")) return "Codex usage limits unavailable";
+  if (err.startsWith("Codex account changed")) return "Codex account changed — refreshing";
   if (err.includes("no Claude credentials")) return "Sign in to Claude Code to start tracking";
   if (err.startsWith("token expired")) return "Token expired — open Claude Code";
   return "Can't reach usage API — retrying";
@@ -217,13 +263,44 @@ let mockActive = false;
 let lastReal: api.UsageSnapshot | null = null;
 /** Last successful poll — what stays on screen, greyed, while polling fails. */
 let lastOk: api.UsageSnapshot | null = null;
+let provider: api.Provider = "claude";
+let scope = "claude";
+
+function selectScope(next: string) {
+  if (next === scope) return;
+  scope = next;
+  lastOk = null;
+  rate = new RateTracker();
+  splash.setGroup(0);
+  history.selectScope(next);
+  void loadHistory(next);
+}
+
+function selectProvider(next: api.Provider) {
+  const changed = provider !== next;
+  provider = next;
+  for (const [id, button] of providerButtons) button.setAttribute("aria-pressed", String(id === next));
+  const name = next === "codex" ? "Codex" : "Claude";
+  root.setAttribute("aria-label", `${name} usage`);
+  btnRefresh.title = `Refresh ${name} usage`;
+  if (!changed) return;
+  lastReal = null;
+  selectScope(next === "claude" ? "claude" : "codex:unknown");
+  if (!mockActive) {
+    applySnapshot({
+      provider: next, scope, status: "error", source: null,
+      fetchedAt: 0, windows: [], error: `Loading ${name} usage…`,
+    });
+  }
+}
 
 function applySnapshot(s: api.UsageSnapshot) {
+  if (!mockActive) selectScope(s.scope ?? "claude");
   const stale = s.status !== "ok";
   if (!stale && !mockActive) lastOk = s;
-  // A failed poll carries no windows; keep the last known values up instead
-  // of blanking the tiles and graph, drained to grey by the stale flag.
-  const shown = stale && lastOk ? lastOk : s;
+  // Keep the same account’s last values visible on failures. The backend also
+  // preserves stale windows so they remain available after restarting.
+  const shown = stale && lastOk && lastOk.scope === s.scope ? lastOk : s;
   usage.update(shown, stale);
   root.classList.toggle("stale", stale);
   renderStatus(s);
@@ -249,16 +326,19 @@ async function initHistory() {
     }
     localStorage.removeItem(LEGACY_HISTORY_KEY);
   }
+  await loadHistory(scope);
+}
+async function loadHistory(requestedScope: string) {
   try {
-    history.load(await api.getHistory());
-    graph.redraw();
-  } catch {
-    // Backend unavailable; live sampling still fills the graph.
-  }
+    const samples = await api.getHistory(requestedScope);
+    history.loadForScope(requestedScope, samples);
+    if (scope === requestedScope) graph.redraw();
+  } catch { /* Live samples remain available if the history request fails. */ }
 }
 void initHistory();
 
 void api.onUsage((s) => {
+  if ((s.provider ?? "claude") !== provider) return;
   lastReal = s;
   if (!mockActive) applySnapshot(s);
 });
@@ -366,11 +446,15 @@ if (import.meta.env.DEV) {
     }
   });
 }
+let receivedStateChange = false;
 void api.onStateChange((s) => {
+  receivedStateChange = true;
+  selectProvider(s.provider ?? "claude");
   applyTheme(s.theme);
   pinned = s.pin;
   renderPin();
   applyLayout(s.layout);
+  applyGeometry(s.geometry);
   splash.setMascot(s.mascot);
   markMascot(s.mascot);
   graph.setWorkDays(s.workDays);
@@ -379,16 +463,19 @@ void api.onStateChange((s) => {
 });
 
 void api.getState().then((st) => {
+  if (receivedStateChange) return;
+  selectProvider(st.provider ?? "claude");
   applyTheme(st.theme);
   pinned = st.pin;
   renderPin();
   applyLayout(st.layout);
+  applyGeometry(st.geometry);
   splash.setMascot(st.mascot);
   markMascot(st.mascot);
   graph.setWorkDays(st.workDays);
   graph.setHidden(st.hiddenLimits);
   usage.setHidden(st.hiddenLimits);
-  if (st.lastUsage) {
+  if (st.lastUsage && (!lastReal || st.lastUsage.fetchedAt >= lastReal.fetchedAt)) {
     lastReal = st.lastUsage;
     if (!mockActive) applySnapshot(st.lastUsage);
   }

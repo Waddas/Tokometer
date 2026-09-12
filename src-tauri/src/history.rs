@@ -22,6 +22,8 @@ pub struct WindowSample {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sample {
+    #[serde(default = "crate::usage::default_scope")]
+    pub scope: String,
     /// unix epoch ms
     pub ms: i64,
     /// window id → sample; absent ids mean the poll lacked that window
@@ -35,6 +37,8 @@ pub struct Sample {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RawSample {
+    #[serde(default = "crate::usage::default_scope")]
+    scope: String,
     pub ms: i64,
     #[serde(default)]
     w: BTreeMap<String, WindowSample>,
@@ -67,7 +71,11 @@ impl RawSample {
                 w.insert(ID_WEEKLY_ALL.into(), WindowSample { pct, reset });
             }
         }
-        Sample { ms: self.ms, w }
+        Sample {
+            scope: self.scope,
+            ms: self.ms,
+            w,
+        }
     }
 }
 
@@ -133,7 +141,7 @@ pub fn record(samples: &mut Vec<Sample>, snapshot: &UsageSnapshot, now_ms: i64) 
     } else {
         now_ms
     };
-    if let Some(last) = samples.last() {
+    if let Some(last) = samples.iter().rev().find(|s| s.scope == snapshot.scope) {
         if ms - last.ms < MIN_GAP_MS {
             return false;
         }
@@ -156,7 +164,11 @@ pub fn record(samples: &mut Vec<Sample>, snapshot: &UsageSnapshot, now_ms: i64) 
             )
         })
         .collect();
-    samples.push(Sample { ms, w });
+    samples.push(Sample {
+        scope: snapshot.scope.clone(),
+        ms,
+        w,
+    });
     prune(samples, now_ms);
     true
 }
@@ -165,13 +177,18 @@ pub fn record(samples: &mut Vec<Sample>, snapshot: &UsageSnapshot, now_ms: i64) 
 /// samples older than everything already recorded here, so a re-run (or a
 /// second webview instance) can never interleave duplicates.
 pub fn import(samples: &mut Vec<Sample>, mut imported: Vec<Sample>, now_ms: i64) {
-    let cutoff = samples.first().map(|s| s.ms).unwrap_or(i64::MAX);
-    imported.retain(|s| s.ms < cutoff && s.ms > 0);
+    let cutoff = samples
+        .iter()
+        .find(|s| s.scope == "claude")
+        .map(|s| s.ms)
+        .unwrap_or(i64::MAX);
+    imported.retain(|s| s.scope == "claude" && s.ms < cutoff && s.ms > 0);
     if imported.is_empty() {
         return;
     }
     imported.sort_by_key(|s| s.ms);
     imported.append(samples);
+    imported.sort_by_key(|s| s.ms);
     *samples = imported;
     prune(samples, now_ms);
 }
@@ -184,7 +201,7 @@ fn prune(samples: &mut Vec<Sample>, now_ms: i64) {
             continue;
         }
         if age > DENSE_AGE_MS {
-            if let Some(last) = kept.last() {
+            if let Some(last) = kept.iter().rev().find(|last| last.scope == s.scope) {
                 if s.ms - last.ms < SPARSE_GAP_MS {
                     continue;
                 }
@@ -203,8 +220,46 @@ mod tests {
 
     const MIN: i64 = 60_000;
 
+    #[test]
+    fn interleaved_accounts_keep_independent_sampling_and_retention() {
+        let mut log = Vec::new();
+        for i in 1..=8 {
+            let claude = snapshot(i * MIN, 10.0, None);
+            let mut codex = snapshot(i * MIN, 80.0, None);
+            codex.provider = crate::state::Provider::Codex;
+            codex.scope = "codex:account-a".into();
+            assert!(record(&mut log, &claude, i * MIN));
+            assert!(record(&mut log, &codex, i * MIN));
+        }
+        prune(&mut log, 7 * 60 * MIN);
+        for scope in ["claude", "codex:account-a"] {
+            let samples: Vec<_> = log.iter().filter(|s| s.scope == scope).collect();
+            assert_eq!(samples.len(), 2);
+            assert!(samples[1].ms - samples[0].ms >= SPARSE_GAP_MS);
+        }
+        let json = serde_json::to_string(&log).unwrap();
+        let decoded: Vec<RawSample> = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            decoded.into_iter().nth(1).unwrap().normalize().scope,
+            "codex:account-a"
+        );
+    }
+
+    #[test]
+    fn legacy_import_is_always_claude_even_after_codex_has_started() {
+        let mut codex = sample(MIN, 90.0);
+        codex.scope = "codex:a".into();
+        let mut log = vec![codex];
+        import(&mut log, vec![sample(2 * MIN, 5.0)], 3 * MIN);
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].scope, "codex:a");
+        assert_eq!(log[1].scope, "claude");
+    }
+
     fn snapshot(fetched_at: i64, five: f64, five_reset: Option<i64>) -> UsageSnapshot {
         UsageSnapshot {
+            provider: crate::state::Provider::Claude,
+            scope: crate::usage::default_scope(),
             status: "ok".into(),
             source: Some("oauth".into()),
             fetched_at,
@@ -214,6 +269,7 @@ mod tests {
                 utilization: five,
                 reset_at: five_reset,
                 stale: false,
+                window_seconds: None,
             }],
             error: None,
         }
@@ -221,6 +277,7 @@ mod tests {
 
     fn sample(ms: i64, five: f64) -> Sample {
         Sample {
+            scope: crate::usage::default_scope(),
             ms,
             w: BTreeMap::from([(
                 ID_SESSION.to_string(),
@@ -268,6 +325,7 @@ mod tests {
             utilization: 21.0,
             reset_at: Some(18_000),
             stale: false,
+            window_seconds: None,
         });
         record(&mut log, &snap, MIN);
         assert_eq!(log[0].w["weekly_scoped:fable"].pct, 21.0);
@@ -284,6 +342,7 @@ mod tests {
             utilization: 21.0,
             reset_at: Some(18_000),
             stale: true,
+            window_seconds: None,
         });
         assert!(record(&mut log, &snap, MIN));
         assert_eq!(log[0].w.keys().collect::<Vec<_>>(), [ID_SESSION]);

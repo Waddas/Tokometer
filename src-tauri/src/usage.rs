@@ -1,5 +1,10 @@
+use crate::state::Provider;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+pub fn default_scope() -> String {
+    "claude".into()
+}
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn now_ms() -> i64 {
@@ -33,11 +38,19 @@ pub struct LimitWindow {
     /// live windows and older state.json files serialize identically.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub stale: bool,
+    /// Duration reported by the provider; absent on legacy Claude windows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window_seconds: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageSnapshot {
+    #[serde(default)]
+    pub provider: Provider,
+    /// Provider/account history key; never contains a credential.
+    #[serde(default = "default_scope")]
+    pub scope: String,
     pub status: String,         // "ok" | "error"
     pub source: Option<String>, // "oauth" | "messages"
     pub fetched_at: i64,        // unix epoch ms
@@ -50,6 +63,8 @@ pub struct UsageSnapshot {
 impl UsageSnapshot {
     pub fn ok(source: &str, windows: Vec<LimitWindow>) -> Self {
         Self {
+            provider: Provider::Claude,
+            scope: default_scope(),
             status: "ok".into(),
             source: Some(source.into()),
             fetched_at: now_ms(),
@@ -60,6 +75,8 @@ impl UsageSnapshot {
 
     pub fn error(message: String) -> Self {
         Self {
+            provider: Provider::Claude,
+            scope: default_scope(),
             status: "error".into(),
             source: None,
             fetched_at: now_ms(),
@@ -87,6 +104,7 @@ fn window_from_value(v: &Value, id: &str, label: &str) -> Option<LimitWindow> {
         utilization: raw.clamp(0.0, 100.0),
         reset_at: v.get("resets_at").and_then(value_to_epoch_secs),
         stale: false,
+        window_seconds: None,
     })
 }
 
@@ -123,6 +141,7 @@ fn limit_from_value(v: &Value) -> Option<LimitWindow> {
         utilization: percent.clamp(0.0, 100.0),
         reset_at: v.get("resets_at").and_then(value_to_epoch_secs),
         stale: false,
+        window_seconds: None,
     })
 }
 
@@ -167,6 +186,7 @@ pub fn from_ratelimit_headers(headers: &reqwest::header::HeaderMap) -> Option<Us
                 utilization: (five_util * 100.0).clamp(0.0, 100.0),
                 reset_at: epoch("anthropic-ratelimit-unified-5h-reset"),
                 stale: false,
+                window_seconds: None,
             },
             LimitWindow {
                 id: ID_WEEKLY_ALL.into(),
@@ -174,6 +194,7 @@ pub fn from_ratelimit_headers(headers: &reqwest::header::HeaderMap) -> Option<Us
                 utilization: (seven_util * 100.0).clamp(0.0, 100.0),
                 reset_at: epoch("anthropic-ratelimit-unified-7d-reset"),
                 stale: false,
+                window_seconds: None,
             },
         ],
     ))
@@ -571,6 +592,7 @@ mod tests {
             utilization,
             reset_at: Some(10),
             stale: false,
+            window_seconds: None,
         }
     }
 

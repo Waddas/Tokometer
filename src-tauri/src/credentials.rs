@@ -28,6 +28,26 @@ fn candidate_paths() -> Vec<PathBuf> {
     paths
 }
 
+/// Local evidence of Claude use; no token parsing or network validation.
+/// Keychain lookup asks only whether the item exists, never for its password.
+pub fn is_present() -> bool {
+    if candidate_paths().iter().any(|path| path.is_file()) {
+        return true;
+    }
+    if std::env::var_os("HOME").is_some_and(|home| PathBuf::from(home).join(".claude.json").is_file()) {
+        return true;
+    }
+    #[cfg(target_os = "macos")]
+    return std::process::Command::new("/usr/bin/security")
+        .args(["find-generic-password", "-s", "Claude Code-credentials"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
 pub struct Credentials {
     pub token: String,
     /// `expiresAt` from the file, ms epoch. Informational only — the request

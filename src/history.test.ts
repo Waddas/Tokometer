@@ -22,6 +22,28 @@ function snapshot(
 const MIN = 60_000;
 
 describe("UsageHistory", () => {
+  it("drops previous-account points and ignores late history responses", () => {
+    const h = new UsageHistory();
+    h.sample(snapshot(MIN, 10, null));
+    h.selectScope("codex:a");
+    h.sample({ ...snapshot(2 * MIN, 80, null), provider: "codex", scope: "codex:a" });
+    h.loadForScope("claude", [{ ms: MIN, w: { session: { pct: 10 } } }]);
+    expect(h.points(SESSION_ID, 0, null)).toEqual([{ ms: 2 * MIN, pct: 80 }]);
+    h.loadForScope("codex:a", [{ ms: MIN, w: { session: { pct: 75 } } }]);
+    expect(h.points(SESSION_ID, 0, null)).toEqual([{ ms: MIN, pct: 75 }, { ms: 2 * MIN, pct: 80 }]);
+    h.selectScope("codex:b");
+    h.sample({ ...snapshot(3 * MIN, 85, null), scope: "codex:a" });
+    expect(h.points(SESSION_ID, 0, null)).toEqual([]);
+  });
+
+  it("does not turn stale windows into fresh history samples", () => {
+    const h = new UsageHistory();
+    const s = snapshot(MIN, 10, 5);
+    s.windows[1].stale = true;
+    h.sample(s);
+    expect(h.points(SESSION_ID, 0, null)).toHaveLength(1);
+    expect(h.points(WEEKLY_ALL_ID, 0, null)).toEqual([]);
+  });
   it("records samples and serves window points", () => {
     const h = new UsageHistory();
     h.sample(snapshot(0, 10, 5), 0);

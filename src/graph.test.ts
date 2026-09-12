@@ -6,6 +6,11 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 describe("windowSpan", () => {
+  it("uses provider durations for short and model-specific windows", () => {
+    expect(windowSpan(SESSION_ID, 3600).windowMs).toBe(HOUR);
+    expect(windowSpan("weekly_scoped:spark", 18000).windowMs).toBe(5 * HOUR);
+    expect(windowSpan(SESSION_ID, 0).windowMs).toBe(5 * HOUR);
+  });
   it("spans the session window five hours", () => {
     expect(windowSpan(SESSION_ID).windowMs).toBe(5 * HOUR);
   });

@@ -4,12 +4,17 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::history::{HistoryLog, RawSample, Sample};
 use crate::poller::RefreshSignal;
-use crate::state::{AppState, BetaFeatures, Layout, Mascot, Size, Theme, TrayStyle};
+use crate::state::{AppState, BetaFeatures, Layout, Mascot, Provider, Size, Theme, TrayStyle};
 
 #[tauri::command]
 pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
     let s = state.0.lock().unwrap();
     json!({
+        "controlsSide": s.controls_side,
+        "providersSide": s.providers_side,
+        "geometry": s.geometry(),
+        "provider": s.provider,
+        "availableProviders": s.available_providers,
         "pin": s.pin,
         "layout": s.layout,
         "size": s.size,
@@ -28,6 +33,22 @@ pub fn get_state(state: State<'_, AppState>) -> serde_json::Value {
 #[tauri::command]
 pub fn refresh_now(signal: State<'_, RefreshSignal>) {
     signal.0.notify_one();
+}
+
+#[tauri::command]
+pub fn set_provider(app: AppHandle, provider: Provider) {
+    let changed = {
+        let state = app.state::<AppState>();
+        let mut s = state.0.lock().unwrap();
+        s.available_providers.allows(provider) && s.switch_provider(provider)
+    };
+    if !changed {
+        return;
+    }
+    crate::state::save(&app);
+    crate::tray::emit_state(&app);
+    crate::tray::refresh(&app);
+    app.state::<RefreshSignal>().0.notify_one();
 }
 
 #[tauri::command]
@@ -61,6 +82,24 @@ pub fn set_tray_style(app: AppHandle, style: String) {
     if let Some(style) = TrayStyle::from_id(&style) {
         apply_tray_style(&app, style);
     }
+}
+
+#[tauri::command]
+pub fn set_control_sides(
+    app: AppHandle,
+    controls: crate::chrome::Side,
+    providers: crate::chrome::Side,
+) {
+    let (layout, scale) = {
+        let state = app.state::<AppState>();
+        let mut s = state.0.lock().unwrap();
+        s.controls_side = controls;
+        s.providers_side = providers;
+        (s.layout, s.effective_scale())
+    };
+    resize_main(&app, layout, scale);
+    crate::state::save(&app);
+    crate::tray::emit_state(&app);
 }
 
 #[tauri::command]
@@ -119,8 +158,15 @@ pub fn open_settings(app: AppHandle) {
 }
 
 #[tauri::command]
-pub fn get_history(log: State<'_, HistoryLog>) -> Vec<Sample> {
-    log.0.lock().unwrap().clone()
+pub fn get_history(log: State<'_, HistoryLog>, scope: Option<String>) -> Vec<Sample> {
+    let scope = scope.unwrap_or_else(crate::usage::default_scope);
+    log.0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|s| s.scope == scope)
+        .cloned()
+        .collect()
 }
 
 /// One-time migration of the pre-backend localStorage history (see
@@ -229,11 +275,16 @@ pub fn show_settings(app: &AppHandle) {
     });
 }
 
-fn resize_main(app: &AppHandle, layout: Layout, scale: f64) {
+pub(crate) fn resize_main(app: &AppHandle, layout: Layout, scale: f64) -> crate::chrome::Geometry {
+    let geometry = {
+        let state = app.state::<AppState>();
+        let s = state.0.lock().unwrap();
+        crate::chrome::Geometry::with_providers(layout, scale, s.controls_side, s.providers_side, s.available_providers.both())
+    };
     if let Some(win) = app.get_webview_window("main") {
-        let (w, h) = layout.window_size(scale);
-        let _ = win.set_size(tauri::LogicalSize::new(w, h));
+        let _ = win.set_size(tauri::LogicalSize::new(geometry.width, geometry.height));
     }
+    geometry
 }
 
 /// Single mutation path for "pin on top" — used by the UI command and settings.
@@ -296,16 +347,17 @@ pub fn apply_tray_style(app: &AppHandle, style: TrayStyle) {
 /// ratio, so no drag can distort the widget. `commit` (the drag ending)
 /// persists the resulting free-resize scale.
 #[tauri::command]
-pub fn resize_widget(app: AppHandle, width: f64, commit: bool) {
+pub fn resize_widget(app: AppHandle, width: f64, commit: bool) -> Option<crate::chrome::Geometry> {
     if !width.is_finite() {
-        return;
+        return None;
     }
     let layout = app.state::<AppState>().0.lock().unwrap().layout;
     let scale = layout.scale_for_width(width);
-    resize_main(&app, layout, scale);
+    let geometry = resize_main(&app, layout, scale);
     if commit {
         app.state::<AppState>().0.lock().unwrap().custom_scale = Some(scale);
         crate::state::save(&app);
         crate::tray::emit_state(&app);
     }
+    Some(geometry)
 }

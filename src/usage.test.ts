@@ -76,6 +76,7 @@ describe("UsageRenderer", () => {
       expect(sessionPct().textContent).toBe("--%");
       expect(sessionReset().textContent).toBe("---");
       expect(tileCounts).toEqual([2]);
+      expect(container.querySelector("[title]")).toBeNull();
     });
 
     it("renders one labelled tile per window, in the snapshot's order", () => {
@@ -232,41 +233,41 @@ describe("UsageRenderer", () => {
   });
 
   // Compact tiles show the percentage alone (a container query in styles.css,
-  // so not exercisable here); the label and countdown live in the tooltip and
+  // so not exercisable here); the label and countdown live in the accessible label and
   // in the info view a right-click flips the tile to.
-  describe("tile tooltips", () => {
-    it("gives every tile a tooltip naming the limit and its countdown", () => {
+  describe("tile accessible labels", () => {
+    it("gives every tile a accessible label naming the limit and its countdown", () => {
       renderer.update(
         snapshot([
           window_("session", "5h", 19, resetInMinutes(85)),
           window_("weekly_scoped:fable", "Fable", 21, resetInMinutes(2 * 1440 + 900)),
         ]),
       );
-      expect(tile("session").title).toBe("5h — resets in 1h 25m");
-      expect(tile("weekly_scoped:fable").title).toBe("Fable — resets in 2d 15h");
+      expect(tile("session").getAttribute("aria-label")).toBe("5h — resets in 1h 25m");
+      expect(tile("weekly_scoped:fable").getAttribute("aria-label")).toBe("Fable — resets in 2d 15h");
     });
 
     it("names the limit alone when there is no reset time", () => {
       renderer.update(snapshot([window_("weekly_scoped:fable", "Fable", 21)]));
-      expect(tile("weekly_scoped:fable").title).toBe("Fable");
+      expect(tile("weekly_scoped:fable").getAttribute("aria-label")).toBe("Fable");
     });
 
-    it("refreshes the tooltips on the 30s interval", () => {
+    it("refreshes the accessible labels on the 30s interval", () => {
       renderer.update(snapshot([window_("session", "5h", 10, resetInMinutes(45))]));
-      expect(tile("session").title).toBe("5h — resets in 45m");
+      expect(tile("session").getAttribute("aria-label")).toBe("5h — resets in 45m");
       vi.advanceTimersByTime(5 * 60_000);
-      expect(tile("session").title).toBe("5h — resets in 40m");
+      expect(tile("session").getAttribute("aria-label")).toBe("5h — resets in 40m");
     });
 
-    it("marks a carried-over window's tooltip as a last known value", () => {
+    it("marks a carried-over window's accessible label as a last known value", () => {
       renderer.update(
         snapshot([
           window_("session", "5h", 19, resetInMinutes(85)),
           staleWindow("weekly_scoped:fable", "Fable", 21, resetInMinutes(2 * 1440 + 900)),
         ]),
       );
-      expect(tile("session").title).toBe("5h — resets in 1h 25m");
-      expect(tile("weekly_scoped:fable").title).toBe("Fable — resets in 2d 15h (last known)");
+      expect(tile("session").getAttribute("aria-label")).toBe("5h — resets in 1h 25m");
+      expect(tile("weekly_scoped:fable").getAttribute("aria-label")).toBe("Fable — resets in 2d 15h (last known)");
     });
   });
 

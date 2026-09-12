@@ -12,6 +12,12 @@
         <p>Widget appearance and preferences.</p>
       </header>
       <section>
+        <h2>Usage provider</h2>
+        <div class="options" id="opt-provider" role="group" aria-label="Usage provider"></div>
+        <p class="hint" id="provider-hint"></p>
+        <p class="hint" id="provider-status" role="status"></p>
+      </section>
+      <section>
         <h2>Appearance</h2>
         <div class="options" id="opt-theme" role="group" aria-label="Theme"></div>
       </section>
@@ -29,6 +35,11 @@
         <div class="field">
           <span class="label">Mascot</span>
           <div class="options" id="opt-mascot" role="group" aria-label="Mascot"></div>
+        </div>
+        <div class="field placement-settings">
+          <span class="label">Button positions</span>
+          <div class="placement-row"><span>Tools</span><div class="options" id="opt-controls-side" role="group" aria-label="Tools position"></div></div>
+          <div class="placement-row"><span>Providers</span><div class="options" id="opt-providers-side" role="group" aria-label="Provider buttons position"></div></div>
         </div>
         <div class="field">
           <span class="label">Limits</span>
@@ -55,12 +66,14 @@
       <section>
         <h2>General</h2>
         <label class="check"><input type="checkbox" id="autostart" /><span>Start at login</span></label>
+        <div id="probe-options">
         <label class="check"><input type="checkbox" id="probe" /><span>Fallback usage probe</span></label>
         <p class="hint indent">
           When the free usage endpoint fails, cross-check by sending a minimal
           1-token API request. This spends a tiny amount of the quota it
           measures, at most once every 5 minutes.
         </p>
+        </div>
       </section>
 
       <section class="update" id="update" data-phase="idle">
