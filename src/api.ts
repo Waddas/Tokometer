@@ -39,6 +39,10 @@ export interface UsageSnapshot {
   source: "oauth" | "messages" | "codex-oauth" | null;
   /** unix epoch ms */
   fetchedAt: number;
+  /** Age of the retained reading on a failed poll, in unix epoch ms. */
+  lastSuccessAt?: number;
+  retryAt?: number;
+  recovering?: boolean;
   /** Every window the poll reported, in the API's order; empty on failure. */
   windows: LimitWindow[];
   error: string | null;

@@ -1,4 +1,5 @@
 import "./styles.css";
+import { usageStatus } from "./status";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./api";
 import { UsageRenderer } from "./usage";
@@ -233,29 +234,19 @@ void api.onUpdatePhase((u) => {
 });
 
 /* ---- status line: friendly guidance when polling fails ---- */
-// Kept terse: the widget can be very narrow, and the raw error sits in the
-// element's tooltip for anyone who wants the details.
-function friendlyError(err: string): string {
-  if (err.startsWith("Loading")) return err;
-  if (err.startsWith("Codex login expired")) return "Open Codex to refresh your login";
-  if (err.startsWith("Codex login unavailable")) return "Sign in to Codex to start tracking";
-  if (err.startsWith("Codex requires") || err.startsWith("Codex account identity")) return "Sign in to Codex with ChatGPT";
-  if (err.startsWith("Codex usage access denied")) return "Codex usage access denied";
-  if (err.startsWith("Codex returned no")) return "Codex usage limits unavailable";
-  if (err.startsWith("Codex account changed")) return "Codex account changed — refreshing";
-  if (err.includes("no Claude credentials")) return "Sign in to Claude Code to start tracking";
-  if (err.startsWith("token expired")) return "Token expired — open Claude Code";
-  return "Can't reach usage API — retrying";
-}
+let statusSnapshot: api.UsageSnapshot | null = null;
+// Only the displayed age/countdown ticks; this never triggers a network request.
+setInterval(() => { if (statusSnapshot) renderStatus(statusSnapshot); }, 30_000);
 
 function renderStatus(s: api.UsageSnapshot) {
+  statusSnapshot = s;
   const failing = s.status !== "ok";
   statusEl.hidden = !failing;
   // The content grid reserves a band for the bar while it's up (styles.css).
   root.classList.toggle("has-status", failing);
   if (!failing) return;
-  statusEl.textContent = friendlyError(s.error ?? "");
-  statusEl.title = s.error ?? "";
+  statusEl.textContent = usageStatus(s);
+  statusEl.title = `${usageStatus(s)}\n${s.error ?? ""}`;
 }
 
 /* ---- data wiring ---- */

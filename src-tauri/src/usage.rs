@@ -58,6 +58,15 @@ pub struct UsageSnapshot {
     #[serde(default)]
     pub windows: Vec<LimitWindow>,
     pub error: Option<String>,
+    /// Timestamp of the retained successful reading, not the failed request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_success_at: Option<i64>,
+    /// Earliest next attempt after a server-requested pause or rate limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_at: Option<i64>,
+    /// Brief transient-failure grace period; values remain explicitly stale.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovering: bool,
 }
 
 impl UsageSnapshot {
@@ -70,6 +79,9 @@ impl UsageSnapshot {
             fetched_at: now_ms(),
             windows,
             error: None,
+            last_success_at: None,
+            retry_at: None,
+            recovering: false,
         }
     }
 
@@ -82,6 +94,9 @@ impl UsageSnapshot {
             fetched_at: now_ms(),
             windows: Vec::new(),
             error: Some(message),
+            last_success_at: None,
+            retry_at: None,
+            recovering: false,
         }
     }
 }
