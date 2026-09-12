@@ -1,3 +1,5 @@
+mod chrome;
+mod codex;
 mod commands;
 mod credentials;
 mod history;
@@ -166,6 +168,8 @@ pub fn run() {
             commands::set_size,
             commands::set_tray_style,
             commands::set_theme,
+            commands::set_provider,
+            commands::set_control_sides,
             commands::set_work_days,
             commands::set_hidden_limits,
             commands::set_probe_fallback,
@@ -194,8 +198,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let persisted = state::load(&handle);
             let pin = persisted.pin;
-            let layout = persisted.layout;
-            let scale = persisted.effective_scale();
+            let geometry = persisted.geometry();
             let saved_pos = persisted.window;
             app.manage(state::AppState(Mutex::new(persisted)));
             app.manage(history::HistoryLog(Mutex::new(history::load(&handle))));
@@ -204,7 +207,7 @@ pub fn run() {
             // real window bounds; do both before showing so the window never
             // flashes at the default spot.
             let win = app.get_webview_window("main").expect("main window");
-            let (w, h) = layout.window_size(scale);
+            let (w, h) = (geometry.width, geometry.height);
             let _ = win.set_size(tauri::LogicalSize::new(w, h));
             match saved_pos {
                 Some(pos) => {

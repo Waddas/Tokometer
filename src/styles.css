@@ -35,8 +35,10 @@ body {
   position: absolute;
   top: 28px;
   left: 0;
-  right: 0;
-  bottom: 0;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  height: calc(100% - 28px);
   background: var(--bg);
   border-radius: clamp(10px, calc(16px * var(--chrome)), 16px);
   box-shadow: inset 0 0 0 1px var(--border);
@@ -252,7 +254,7 @@ body {
  * put it under ~8.5px — 16.4cqw below a 52px width, 24.6cqh below a 34px
  * height — where it stops being readable at all. There the tile shows the
  * percentage alone, over the whole height; the countdown and the label move to
- * the tooltip and to the info view (usage.ts). 52px is also the side the full
+ * the accessible label and the info view (usage.ts). 52px is also the side the full
  * tier's own lines bottom out at, so a tile wider than this cut always has a
  * readable form: the three lines when it is 52px tall too, the merged pair
  * when it is shorter. A narrow tile can be tall enough to have skipped the
@@ -298,51 +300,28 @@ body {
   opacity: 0.55;
 }
 
-/* ---- grab handle: dragging, since the tiles now react to clicks ---- */
-#drag-handle {
+/* Hover toolbars: native geometry reserves their lanes outside the widget.
+ * Narrow edges wrap; groups sharing an edge occupy separate parallel lanes. */
+.hover-toolbar {
   position: absolute;
-  top: 5px;
-  left: 8px;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 4px;
-  background: var(--panel);
-  color: var(--dim);
-  cursor: grab;
-  opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 10;
-}
-body:hover #drag-handle,
-body:focus-within #drag-handle {
-  opacity: 1;
-}
-#drag-handle:active {
-  cursor: grabbing;
-}
-
-/* ---- hover controls: in the strip above the widget (real pixels) ---- */
-#controls {
-  position: absolute;
-  top: 0;
-  right: 8px;
-  height: 28px;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(var(--columns, 5), 24px);
+  grid-template-rows: repeat(var(--rows, 1), 24px);
   gap: 4px;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s;
   z-index: 10;
 }
-body:hover #controls,
-body:focus-within #controls {
+.hover-toolbar.vertical { grid-auto-flow: column; }
+body:hover .hover-toolbar,
+body:focus-within .hover-toolbar {
   opacity: 1;
+  pointer-events: auto;
 }
-#controls button {
+.hover-toolbar[hidden] { display: none; }
+.hover-toolbar button {
+  position: absolute;
   width: 24px;
   height: 24px;
   display: flex;
@@ -356,27 +335,23 @@ body:focus-within #controls {
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-#drag-handle svg {
-  width: 14px;
-  height: 14px;
-  pointer-events: none; /* let the button own hover/click; * sets cursor on every element */
-}
-#controls button svg {
-  width: 15px;
-  height: 15px;
-  pointer-events: none;
-}
-#controls button:hover {
-  background: var(--track);
-  color: var(--text);
+.hover-toolbar button svg { width: 15px; height: 15px; pointer-events: none; }
+.hover-toolbar button:hover { background: var(--track); color: var(--text); }
+.hover-toolbar button:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+#controls #drag-handle { cursor: grab; box-shadow: none; }
+#controls #drag-handle:active { cursor: grabbing; }
+#provider-controls button[aria-pressed="true"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 #btn-pin.pinned {
   color: var(--accent);
 }
 /* Update-available dot on the settings gear's corner; fades with the controls
  * (the tray icon carries the always-visible dot). */
-#btn-settings {
-  position: relative;
+#controls #btn-settings {
+  position: absolute;
 }
 #update-dot {
   position: absolute;

@@ -2,199 +2,179 @@
 
 # Tokometer
 
-**A tiny desktop widget that keeps your Claude Code usage in sight — with a pixel-art coworker.**
+**Claude Code and Codex usage, always in view.**
+
+A lightweight desktop widget for tracking usage limits, reset times, and trends without interrupting your work.
 
 [![CI](https://github.com/Waddas/Tokometer/actions/workflows/ci.yml/badge.svg)](https://github.com/Waddas/Tokometer/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Waddas/Tokometer?display_name=tag&sort=semver)](https://github.com/Waddas/Tokometer/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app/)
-![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/Waddas?logo=githubsponsors&color=EA4AAA)](https://github.com/sponsors/Waddas)
 
-<img src="docs/hero.png" alt="Tokometer widget showing the mascot and usage tiles" width="360" />
+<img src="docs/hero.png" alt="Small Tokometer widget in Charcoal with a usage graph and reset countdowns" width="188" />
+
+[Download](https://github.com/Waddas/Tokometer/releases/latest) · [Getting started](#getting-started) · [Development](#development) · [Report an issue](https://github.com/Waddas/Tokometer/issues)
 
 </div>
 
-> **Unofficial.** Tokometer is a community-built tool. It is not affiliated
-> with, endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code" are
-> trademarks of Anthropic.
+## Overview
 
-## Features
+Tokometer keeps your coding-agent usage visible in a compact, resizable widget. It reuses your existing Claude Code or Codex login and runs from the system tray on macOS, Windows, and Linux.
 
-- **Live usage at a glance** — the current **5-hour** session and rolling
-  **7-day** window, each with a threshold-coloured percentage and reset
-  countdown, polled once a minute from your existing Claude Code login. No
-  separate sign-in.
-- **A mascot that works when you do** — pixel-art animations speed up with
-  your usage rate. Pick **Clawd**, an **Axolotl**, or a **Cat**.
-- **Usage graph with a forecast** — click the mascot to flip it into a
-  usage-over-time graph: gradient-coloured history, a dotted prediction at
-  your current pace, the limit ceiling, your reset time, and a faint ghost of
-  the previous window for comparison. Hover to read off the time and
-  percentage at any point.
-- **Stays out of the way** — frameless, draggable, freely resizable from the
-  corner grip, optionally pinned above the taskbar, hidden to the tray when
-  you don't want it.
-- **Six layouts** — mascot/graph beside, above, or below the tiles, or tiles
-  only — all in a proper settings window.
-- **Four themes** — Charcoal (default), Midnight, warm Paper, and cool Mist.
-  Choose one in Settings → Appearance; it applies to both windows and is
-  remembered between launches.
+- **Usage and reset times.** See session, weekly, and additional limits returned by your provider, with colour-coded percentages and reset countdowns.
+- **Claude and Codex switching.** Switch from the widget when both providers are detected, or choose a provider in Settings. Each keeps its own hidden-limit preferences.
+- **History and forecasts.** Follow usage over time, compare the previous window, and see a forecast based on your current pace and configured work days.
+- **Flexible layouts.** Place the graph beside, above, or below your usage tiles, or use a compact tiles-only view. Resize with presets or the corner grip.
+- **Controls where you want them.** Position the tools and provider buttons independently on any side. Buttons wrap on narrow widgets and stack when they share a side.
+- **Desktop integration.** Pin the widget above other windows, hide it to the tray, choose a ring or percentage tray indicator, and optionally start at login.
+- **Four themes.** Charcoal is the default, alongside Midnight, Paper, and Mist. The widget and settings window share your chosen theme.
 
-## Showcase
+## Layouts
 
-| Mascots at work | Usage graph |
-| :---: | :---: |
-| <img src="docs/mascots.gif" alt="The three mascots animating" width="360" /> | <img src="docs/graph.png" alt="Usage graph with prediction" width="360" /> |
+Use the graph beside your limits, as shown above, or choose a layout that fits your workspace. These screenshots show sample usage in **Charcoal** at the **Small** size preset, with controls hidden.
 
-| Animations follow your usage rate | Layouts |
-| :---: | :---: |
-| <img src="docs/usage-rate.gif" alt="Mascot animation speeding up with usage" width="360" /> | <img src="docs/layouts.png" alt="The six widget layouts" width="360" /> |
+| Graph above | Tiles wide | Tiles tall |
+| :---: | :---: | :---: |
+| <img src="docs/layout-graph-top.png" alt="Small Charcoal widget with the usage graph above two limit tiles" width="159" /> | <img src="docs/layout-tiles-wide.png" alt="Small Charcoal widget with usage tiles side by side" width="159" /> | <img src="docs/layout-tiles-tall.png" alt="Small Charcoal widget with stacked usage tiles" width="86" /> |
 
-## Controls
-
-| Action | What it does |
-| --- | --- |
-| **Drag** the widget (or the ☰ handle) | Move it anywhere |
-| **Drag** the ↘ corner grip | Resize the widget to any scale |
-| **Click** the mascot | Flip between mascot and usage graph |
-| **Hover** the graph | Read the time and percentage under the cursor |
-| **Right-click** the graph | Cycle through the limit windows: 5-hour, 7-day, and any model-specific limit |
-| **Right-click** the mascot | Pick a mascot (Clawd / Axolotl / Cat) |
-| **Hover** | Reveal pin-on-top, refresh, settings, and hide buttons |
-| **Settings window** (⚙ or tray) | Layout, size, mascot, tray icon, work days, pin, start at login |
-| **Tray menu** | Show/hide, settings, refresh, check for updates, quit |
-
-The tray icon doubles as a status light — its bubble turns green/amber/red
-with your session usage, and the tooltip shows both live percentages.
-
-## How it works
-
-- **Credentials** — the poller reuses your Claude Code OAuth login, read fresh
-  on every poll. On **macOS** that's the login Keychain
-  (`Claude Code-credentials`); on **Windows/Linux** it's
-  `~/.claude/.credentials.json` (with `%LOCALAPPDATA%`/`%APPDATA%` fallbacks).
-  Nothing is stored or sent anywhere else.
-- **Usage** — Anthropic's OAuth usage endpoint is polled once a minute for the
-  utilization and reset time of both windows, with a probe fallback (below)
-  when that endpoint fails. If the endpoint rate-limits the account (HTTP
-  429), retries back off exponentially (2 → 4 → 8 → 15 min, with jitter)
-  instead of hammering it; a manual refresh retries immediately.
-- **History** — the API only reports *current* utilization, so the app
-  accumulates its own time series locally (`history.json` next to its config)
-  to draw the graph: full resolution for recent hours, thinned to one sample
-  per five minutes beyond that, capped at 15 days — enough for each view to
-  show a ghost of its previous window. Each sample records its window's reset
-  time, so windows are compared by identity rather than wall-clock guesswork.
-- **Fallback probe** (on by default) — if the free usage endpoint fails,
-  Tokometer cross-checks by sending a minimal 1-token `/v1/messages` request
-  and reading the rate-limit headers. It only runs while the usage endpoint
-  is failing, never fires more than once every 5 minutes, and spends a
-  sliver (one Haiku token) of the quota it measures — it can be turned off
-  under Settings → Fallback usage probe.
+The graph can also sit to the right or below the tiles. Tool and provider buttons can each be placed on any side, independently of the layout.
 
 ## Install
 
-Grab the latest installer for your platform from the
-[**Releases**](https://github.com/Waddas/Tokometer/releases/latest) page:
+Download the appropriate installer from [Releases](https://github.com/Waddas/Tokometer/releases/latest).
 
-- **macOS** — `.dmg` (universal — Intel & Apple Silicon)
-- **Windows** — `.msi` or NSIS `.exe`
-- **Linux** — `.AppImage`, `.deb`, or `.rpm`
+| Platform | Packages |
+| --- | --- |
+| macOS | Universal `.dmg` for Apple Silicon and Intel |
+| Windows | `.msi` or NSIS `.exe` |
+| Linux | `.AppImage`, `.deb`, or `.rpm` |
 
-Tokometer checks for new releases on launch and once a day after that, and
-shows a small dot on the widget when one is waiting; update from the tray menu
-or **Settings** whenever you like.
+Releases are currently unsigned, so macOS Gatekeeper or Windows SmartScreen may display a warning on first launch. Only open installers you downloaded from this repository's release page and trust.
 
-> **macOS Gatekeeper / Windows SmartScreen:** the app isn't code-signed yet, so
-> your OS may warn on first launch. On macOS, right-click the app → **Open**; on
-> Windows, choose **More info → Run anyway**.
-
-Prefer to build it yourself? See [Getting started](#getting-started) below.
+Tokometer checks for updates on launch and daily thereafter. An indicator on the settings button appears when an update is available; install it through Settings or the tray menu.
 
 ## Getting started
 
-### Prerequisites
+1. **Sign in to Claude Code or Codex.** Codex usage requires a ChatGPT login saved in a local `auth.json` file.
+2. **Launch Tokometer and open Settings.** Select a detected provider under **Usage provider**.
+3. **Choose your view.** Set the layout, size, theme, and visible limits. Click the animated display to switch it to the usage graph.
+4. **Arrange the controls.** Under **Widget → Button positions**, choose a side for Tools and Providers independently.
 
-- Node.js + npm
-- Rust toolchain ([`rustup`](https://rustup.rs/))
-- Platform build deps for Tauri — see the
-  [Tauri prerequisites guide](https://tauri.app/start/prerequisites/)
-  (Xcode Command Line Tools on macOS, WebView2 + MSVC build tools on Windows,
-  `webkit2gtk` + friends on Linux)
+Only the selected provider makes usage requests, normally once a minute. History builds locally while Tokometer runs; a new installation starts without historical data.
 
-### Develop
+### Provider detection
+
+A provider becomes selectable when Tokometer finds evidence of local use. Detection does **not** depend on a successful usage request, so an expired login, rate limit, or connection problem will not hide a provider.
+
+| Provider | Local detection | Requirements for usage data |
+| --- | --- | --- |
+| Claude | Claude credential files, `~/.claude.json`, or the `Claude Code-credentials` macOS Keychain entry | An existing Claude Code OAuth login |
+| Codex | `auth.json` in `CODEX_HOME`, or the default `.codex` directory in your home folder | A ChatGPT login using file-based credential storage |
+
+Local detection runs at launch, each polling cycle, and on **Refresh**. The widget's Claude and ChatGPT icon buttons appear only when both providers are detected. The active provider has an accent highlight; providers that are not detected remain disabled in Settings.
+
+Codex's integration uses local files and HTTPS, with no macOS-only dependency. On Windows, the home directory falls back to `%USERPROFILE%` when `HOME` is unset. Credentials stored only in a system credential store or a separate WSL environment are not automatically discovered. An existing but unsupported or unreadable auth file produces a usage error rather than a crash.
+
+## Controls
+
+Hover over the widget to reveal its buttons. The grab handle is separated from the other tools; when controls wrap, grab and close stay at the top corners and the remaining rows are centered.
+
+<p align="center">
+  <img src="docs/widget-controls.png" alt="Medium Charcoal widget with the grab handle and tool buttons above, and Claude and Codex buttons on the right" width="314" />
+  <br />
+  <sub>Medium size, with hover controls visible.</sub>
+</p>
+
+| Action | Result |
+| --- | --- |
+| Drag the widget or grab handle | Move the widget |
+| Drag the bottom-right grip | Resize the widget |
+| Click a provider icon | Switch between Claude and Codex |
+| Click Pin | Keep the widget above other windows |
+| Click Refresh | Recheck local providers and retry usage immediately |
+| Click Settings | Adjust appearance, layout, limits, controls, and startup preferences |
+| Click Close | Hide the widget; restore it from the tray |
+| Hover over the graph | Inspect usage and time at the cursor |
+| Right-click the graph | Cycle through visible limit windows |
+| Right-click a usage tile | Toggle between usage percentage and limit/reset details |
+
+Usage tiles and the graph have no native hover tooltips. The graph retains its own cursor readout. The display also supports optional animated mascots; click it to switch between animation and graph, or right-click the animation to choose another character.
+
+## Data and privacy
+
+Tokometer reads existing credentials and sends usage requests directly to the selected provider. It does not require a separate Tokometer account or a hosted backend. Settings and usage history are stored locally.
+
+### Claude
+
+Credentials are read fresh on each poll from the macOS login Keychain or Claude credential files. File lookup includes `~/.claude/.credentials.json` and the Windows `%LOCALAPPDATA%` and `%APPDATA%` Claude directories.
+
+The OAuth usage endpoint supplies usage and reset times. When it returns HTTP 429, automatic retries back off through 2, 4, 8, and 15 minutes, with jitter. Manual Refresh retries immediately.
+
+**Fallback usage probe is enabled by default.** If the usage endpoint fails, Tokometer can send a minimal Messages API request with a one-token output limit and read its rate-limit headers. This consumes a small amount of Claude usage and runs at most once every five minutes while the endpoint is failing. Disable **Fallback usage probe** in Settings if you want usage-endpoint requests only.
+
+### Codex
+
+Tokometer reads `$CODEX_HOME/auth.json`, or `~/.codex/auth.json` by default, and queries OpenAI's internal usage endpoint directly. It does not launch the Codex CLI or an app-server, send model prompts, refresh tokens, or write to the credential file.
+
+API-key and other non-ChatGPT login modes are not supported for subscription usage tracking. If the login expires, refresh it through Codex and then click Refresh in Tokometer. This implementation follows the direct OAuth approach documented by [CodexBar](https://github.com/steipete/CodexBar/blob/1c4650d1b421bda3f0e495e8c14b69dc1b3de81d/docs/codex-oauth.md). The endpoint is internal and may change.
+
+### Local history
+
+The providers report current usage, so Tokometer records its own time series in `history.json` alongside its settings. Recent samples retain full resolution; older history is reduced to five-minute intervals and retained for up to 15 days.
+
+Claude and Codex histories are separate. Codex history is additionally partitioned by hashed account/workspace identity, so switching accounts does not combine their readings. Graphs use each window's reported duration and reset time. Failed requests retain the same account's last reading as visibly stale data.
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| A provider is disabled | Confirm its local files or credentials exist, then click Refresh. For Codex, check whether `CODEX_HOME` points to a different directory. |
+| Provider icons are missing | Both providers must be detected for the widget switcher to appear. Settings remains available for provider selection. |
+| Login expired or unavailable | Sign in again through Claude Code or Codex, then refresh. Codex requires file-based ChatGPT credentials. |
+| Usage is faded or an error appears | The reading is stale. Check the provider status in Settings, your connection, and your login. |
+| The graph is empty | Leave Tokometer running to collect history; providers do not supply historical samples. |
+| The widget disappeared | Restore it from the system tray. The close button hides it rather than quitting. |
+
+## Development
+
+### Requirements
+
+- Node.js and npm
+- The Rust toolchain via [rustup](https://rustup.rs/)
+- [Tauri platform prerequisites](https://tauri.app/start/prerequisites/)
+- [Task](https://taskfile.dev/) for the workflows below
 
 ```sh
 npm install
-npm run tauri dev
+task dev
 ```
 
-Or with [Task](https://taskfile.dev/): `task install`, then `task dev`.
+`task dev` uses a separate application identifier, keeping its settings and history isolated from the installed app. To copy installed data into the development profile, run `task dev:seed` first.
 
-`task dev` runs under a separate identifier (`….tokometer.dev`), so its
-history and settings are isolated from an installed Tokometer and the two can
-run side by side. `task dev:seed` copies the installed app's `history.json`
-and `state.json` into the dev build's data directory when you want real data
-to work against.
+For the standard Tauri development command, use `npm run tauri dev`; it does not use that isolated profile.
 
-**Dev tips**
+| Command | Purpose |
+| --- | --- |
+| `task dev:web` | Run the Vite frontend only |
+| `task check` | Type-check, run Clippy, and run the frontend and Rust tests |
+| `task fmt` | Format Rust source |
+| `task test:e2e` | Build and run the Windows WebView2 settings-window smoke test |
+| `task build` | Build native release bundles |
 
-- Press **D** in a dev build to toggle dev mode — a small badge in the strip
-  above the widget shows the current state, and leaving dev mode resets it.
-  While it's on:
-  - **M** cycles the data source: mocked usage data — a representative set of
-    curves (bursts, plateaus, a near-limit previous window) so you can iterate
-    on the graph without waiting for live history — then a mocked API failure
-    (for the error status bar), then back to live. Your real local history is
-    untouched throughout.
-  - **A** pins the mascot to a specific animation, cycling through all of
-    them and back to the automatic rate-based rotation.
-- `task test` runs the frontend (Vitest) and Rust test suites; `task check`
-  adds typechecking and linting.
-- `task test:e2e` (Windows only) builds a debug app under a separate identifier
-  and drives the real UI over the WebView2 devtools protocol — it opens the
-  settings window from the widget and asserts the app stays responsive, which
-  unit tests can't cover.
+In development builds, **D** toggles developer mode and **M** cycles through live and sample usage states for checking graphs and error handling. Mock data does not overwrite recorded history.
 
-### Build
+Release bundles are written to `src-tauri/target/release/bundle/`. macOS transparency uses Tauri's private API support, so macOS builds are intended for direct distribution rather than the Mac App Store. Windows CI includes native tests and a settings-window smoke test; the Codex integration has been manually verified on macOS.
 
-```sh
-npm run tauri build   # or: task build
-```
+## Contributing and support
 
-Native installers land in `src-tauri/target/release/bundle/` — NSIS/MSI on
-Windows, `.app`/`.dmg` on macOS, deb/AppImage/rpm on Linux.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for setup and PR conventions, and follow the [Code of Conduct](.github/CODE_OF_CONDUCT.md). Report bugs through [GitHub Issues](https://github.com/Waddas/Tokometer/issues) and security concerns through the [Security Policy](.github/SECURITY.md).
 
-## Platform notes
+If Tokometer is useful to you, you can support its development through [GitHub Sponsors](https://github.com/sponsors/Waddas).
 
-- **Window transparency** needs Tauri's `macos-private-api` feature on macOS
-  (already configured); it is inert elsewhere. A macOS build using this
-  private API cannot ship on the Mac App Store, which is fine for direct
-  distribution.
-- On **Windows**, a pinned widget re-asserts itself above the taskbar, which
-  shares the topmost z-band.
+## Credits and license
 
-## Contributing
+Inspired by [Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter), with Codex integration informed by [CodexBar](https://github.com/steipete/CodexBar). Provider icons come from [LobeHub Icons](https://github.com/lobehub/lobe-icons), the typeface is [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk), and the Clawd artwork derives from [claudepix](https://claudepix.vercel.app/).
 
-Contributions are welcome — bug reports, docs, new mascots, and features alike.
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the development workflow and
-PR conventions, and please follow the
-[Code of Conduct](.github/CODE_OF_CONDUCT.md). Found a security issue? See the
-[Security Policy](.github/SECURITY.md).
+Tokometer is licensed under [GPL-3.0-or-later](LICENSE). Bundled assets retain their respective licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-## Credits
-
-- Inspired by [Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter).
-- The **Clawd** pixel-art is derived from the community
-  [claudepix](https://claudepix.vercel.app/) set — thank you!
-- Typeface: [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk)
-  (SIL OFL 1.1).
-
-## License
-
-[GPL-3.0-or-later](LICENSE).
-
-The bundled font and pixel-art are redistributed under their own permissive
-licenses — see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
-`src/fonts/`.
+Tokometer is an unofficial community project, unaffiliated with Anthropic or OpenAI. Product names and trademarks belong to their respective owners.

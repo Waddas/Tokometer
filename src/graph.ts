@@ -30,7 +30,11 @@ const MONTHLY_SPAN: Span = { windowMs: 30 * DAY_MS, trendMs: DAY_MS };
 /** A window's span from its id's kind (the part before any ":<model>" scope,
  *  see usage.rs). Unknown kinds are read as weekly, the shape of every scoped
  *  limit so far. */
-export function windowSpan(id: string): Span {
+export function windowSpan(id: string, seconds?: number): Span {
+  if (seconds != null && Number.isFinite(seconds) && seconds > 0) {
+    const windowMs = seconds * 1000;
+    return { windowMs, trendMs: Math.min(windowMs, windowMs > DAY_MS ? 6 * HOUR_MS : 30 * 60_000) };
+  }
   const kind = id.split(":")[0];
   if (kind === SESSION_ID) return SESSION_SPAN;
   if (kind.startsWith("monthly")) return MONTHLY_SPAN;
@@ -187,9 +191,9 @@ export class UsageGraph {
     const c = this.chrome;
     const pad = PAD * c;
     const shown = this.current();
-    const span = windowSpan(shown.id);
     const now = Date.now();
     const win = this.snapshot?.windows.find((w) => w.id === shown.id) ?? null;
+    const span = windowSpan(shown.id, win?.windowSeconds);
     // No reset time means no window is running (the last one lapsed and
     // nothing has started a new one); the axes then track the current moment.
     const resetMs = win?.resetAt ? win.resetAt * 1000 : null;

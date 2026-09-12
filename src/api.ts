@@ -14,6 +14,8 @@ export interface LimitWindow {
   /** A last known value the poll couldn't observe (`carry_missing_windows` in
    *  usage.rs); absent on live windows. */
   stale?: boolean;
+  /** Provider-reported duration, in seconds. */
+  windowSeconds?: number;
 }
 
 /** Well-known window ids; mirrors `ID_SESSION`/`ID_WEEKLY_ALL` in usage.rs. */
@@ -27,9 +29,14 @@ export const DEFAULT_WINDOWS: readonly Pick<LimitWindow, "id" | "label">[] = [
   { id: WEEKLY_ALL_ID, label: "7d" },
 ];
 
+export type Provider = "claude" | "codex";
+
 export interface UsageSnapshot {
+  /** Missing only in legacy snapshots and dev fixtures. */
+  provider?: Provider;
+  scope?: string;
   status: "ok" | "error";
-  source: "oauth" | "messages" | null;
+  source: "oauth" | "messages" | "codex-oauth" | null;
   /** unix epoch ms */
   fetchedAt: number;
   /** Every window the poll reported, in the API's order; empty on failure. */
@@ -73,7 +80,20 @@ export type BetaFlag = never;
 export type BetaFeatures = Record<BetaFlag, boolean>;
 
 /** The persisted preferences, as get_state and state://change report them. */
+export type ControlSide = "top" | "left" | "right" | "bottom";
+export interface ChromeRect { x: number; y: number; width: number; height: number }
+export interface ChromeToolbar { rect: ChromeRect; buttons: ChromeRect[]; columns: number; rows: number; vertical: boolean }
+export interface ChromeGeometry {
+  width: number; height: number; widget: ChromeRect;
+  controls: ChromeToolbar; providers: ChromeToolbar;
+}
+
 export interface Preferences {
+  controlsSide: ControlSide;
+  providersSide: ControlSide;
+  geometry?: ChromeGeometry;
+  availableProviders?: Record<Provider, boolean>;
+  provider: Provider;
   pin: boolean;
   layout: Layout;
   size: Size;
@@ -106,6 +126,9 @@ export const setMascot = (mascot: Mascot) => invoke<void>("set_mascot", { mascot
 export const setLayout = (layout: Layout) => invoke<void>("set_layout", { layout });
 export const setSize = (size: Size) => invoke<void>("set_size", { size });
 export const setTrayStyle = (style: TrayStyle) => invoke<void>("set_tray_style", { style });
+export const setControlSides = (controls: ControlSide, providers: ControlSide) =>
+  invoke<void>("set_control_sides", { controls, providers });
+export const setProvider = (provider: Provider) => invoke<void>("set_provider", { provider });
 export const setTheme = (theme: Theme) => invoke<void>("set_theme", { theme });
 export const setWorkDays = (days: boolean[]) => invoke<void>("set_work_days", { days });
 export const setHiddenLimits = (ids: string[]) => invoke<void>("set_hidden_limits", { ids });
@@ -115,13 +138,13 @@ export const setBeta = (beta: BetaFeatures) => invoke<void>("set_beta", { beta }
 /** Size the widget for a logical width, height locked to the layout's aspect
  * ratio; `commit` persists the resulting free-resize scale. */
 export const resizeWidget = (width: number, commit: boolean) =>
-  invoke<void>("resize_widget", { width, commit });
+  invoke<ChromeGeometry | null>("resize_widget", { width, commit });
 export const toggleVisibility = () => invoke<void>("toggle_visibility");
 export const openSettings = () => invoke<void>("open_settings");
 export const getAutostart = () => invoke<boolean>("get_autostart");
 export const setAutostart = (enabled: boolean) => invoke<boolean>("set_autostart", { enabled });
 
-export const getHistory = () => invoke<HistorySample[]>("get_history");
+export const getHistory = (scope = "claude") => invoke<HistorySample[]>("get_history", { scope });
 /** One-time migration of the pre-backend localStorage history. */
 export const importHistory = (samples: HistorySample[]) =>
   invoke<void>("import_history", { samples });

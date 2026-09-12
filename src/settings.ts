@@ -55,6 +55,8 @@ function optionGroup<T extends string>(
   for (const [value, label] of options) {
     const btn = document.createElement("button");
     btn.textContent = label;
+    btn.dataset.value = value;
+    if (containerId === "opt-provider") btn.disabled = true;
     btn.setAttribute("aria-pressed", "false");
     btn.addEventListener("click", () => pick(value));
     buttons.set(value, btn);
@@ -67,6 +69,27 @@ function optionGroup<T extends string>(
     }
   };
 }
+
+const markProvider = optionGroup<api.Provider>("opt-provider", [["claude", "Claude"], ["codex", "Codex"]], (p) => void api.setProvider(p));
+let provider: api.Provider = "claude";
+const providerHint = document.getElementById("provider-hint")!;
+const providerStatus = document.getElementById("provider-status")!;
+function renderProviderStatus(snapshot: api.UsageSnapshot | null) {
+  providerStatus.textContent = snapshot?.status === "error" ? snapshot.error : "";
+  providerStatus.hidden = !providerStatus.textContent;
+}
+
+const SIDES: [api.ControlSide, string][] = [["top", "Top"], ["left", "Left"], ["right", "Right"], ["bottom", "Bottom"]];
+let controlsSide: api.ControlSide = "top";
+let providersSide: api.ControlSide = "right";
+const markControlsSide = optionGroup("opt-controls-side", SIDES, (side) => {
+  controlsSide = side;
+  void api.setControlSides(controlsSide, providersSide);
+});
+const markProvidersSide = optionGroup("opt-providers-side", SIDES, (side) => {
+  providersSide = side;
+  void api.setControlSides(controlsSide, providersSide);
+});
 
 const markLayout = optionGroup("opt-layout", LAYOUTS, (l) => void api.setLayout(l));
 const markSize = optionGroup("opt-size", SIZES, (s) => void api.setSize(s));
@@ -201,6 +224,25 @@ function renderLimits() {
 }
 
 function render(prefs: api.Preferences) {
+  controlsSide = prefs.controlsSide ?? "top";
+  providersSide = prefs.providersSide ?? "right";
+  markControlsSide(controlsSide);
+  markProvidersSide(providersSide);
+  const next = prefs.provider ?? "claude";
+  if (provider !== next) {
+    limitWindows = [];
+    renderProviderStatus(null);
+  }
+  provider = next;
+  markProvider(provider);
+  document.querySelectorAll<HTMLButtonElement>("#opt-provider button").forEach((button) => {
+    button.disabled = !prefs.availableProviders?.[button.dataset.value as api.Provider];
+  });
+  providerHint.textContent = provider === "codex"
+    ? "Uses your existing Codex login. Open Codex if your login needs refreshing."
+    : "Uses your existing Claude Code login.";
+  providerHint.textContent += " Providers are detected from local Claude or Codex files and credentials.";
+  document.getElementById("probe-options")!.hidden = provider !== "claude";
   applyTheme(prefs.theme);
   markTheme(prefs.theme);
   markLayout(prefs.layout);
@@ -231,20 +273,32 @@ function render(prefs: api.Preferences) {
 // No waiting on requestAnimationFrame here: frames don't tick while the
 // webview is hidden, so its callback would only run after something else
 // showed the window.
+let receivedStateChange = false;
+let latestUsage: api.UsageSnapshot | null = null;
 void api
   .getState()
   .then((st) => {
-    limitWindows = st.lastUsage?.windows ?? [];
+    if (receivedStateChange) return;
     render(st);
+    const snapshot = latestUsage && latestUsage.fetchedAt > (st.lastUsage?.fetchedAt ?? 0)
+      && (latestUsage.provider ?? "claude") === provider ? latestUsage : st.lastUsage;
+    limitWindows = snapshot?.windows ?? [];
+    renderLimits();
+    renderProviderStatus(snapshot);
   })
   .finally(() => {
     const win = getCurrentWindow();
     void win.show().then(() => win.setFocus());
   });
-void api.onStateChange(render);
+void api.onStateChange((s) => {
+  receivedStateChange = true;
+  render(s);
+});
 // A poll can detect a new limit while this window is open.
 void api.onUsage((s) => {
-  if (s.status !== "ok") return;
+  if ((s.provider ?? "claude") !== provider) return;
+  latestUsage = s;
+  renderProviderStatus(s);
   limitWindows = s.windows;
   renderLimits();
 });

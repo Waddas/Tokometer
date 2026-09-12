@@ -37,89 +37,159 @@ pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(15))
+            .redirect(reqwest::redirect::Policy::none())
             .user_agent(concat!("tokometer/", env!("CARGO_PKG_VERSION")))
             .build()
             .expect("failed to build http client");
         let mut last_probe_ms: i64 = 0;
         let mut consecutive_failures: u32 = 0;
         let mut rate_limited_polls: u32 = 0;
-        // Next moment the usage endpoint may be tried; pushed into the future
-        // while it is rate-limiting us. The probe keeps supplying data in the
-        // meantime, and a manual refresh clears the backoff.
         let mut next_oauth_ms: i64 = 0;
+        let mut last_revision = u64::MAX;
         loop {
+            // Provider visibility reflects local use, independent of API health.
+            publish_availability(&app, crate::state::Provider::Claude, crate::credentials::is_present());
+            publish_availability(&app, crate::state::Provider::Codex, crate::codex::is_present());
+            let (provider, revision, probe_enabled) = {
+                let state = app.state::<crate::state::AppState>();
+                let s = state.0.lock().unwrap();
+                (s.provider, s.provider_revision, s.probe_fallback)
+            };
+            if revision != last_revision {
+                last_revision = revision;
+                consecutive_failures = 0;
+                rate_limited_polls = 0;
+                next_oauth_ms = 0;
+            }
             let now = usage::now_ms();
             let try_oauth = now >= next_oauth_ms;
-            let probe_allowed = {
-                let state = app.state::<crate::state::AppState>();
-                let enabled = state.0.lock().unwrap().probe_fallback;
-                enabled && now - last_probe_ms >= PROBE_MIN_INTERVAL_MS
+            let outcome = match provider {
+                crate::state::Provider::Claude => {
+                    let probe_allowed =
+                        probe_enabled && now - last_probe_ms >= PROBE_MIN_INTERVAL_MS;
+                    poll_once(&client, try_oauth, probe_allowed).await
+                }
+                crate::state::Provider::Codex if try_oauth => {
+                    let (snapshot, limited) = crate::codex::poll(&client).await;
+                    PollOutcome::done(snapshot, false, limited)
+                }
+                crate::state::Provider::Codex => PollOutcome {
+                    snapshot: None,
+                    probed: false,
+                    oauth_rate_limited: false,
+                },
             };
-            let outcome = poll_once(&client, try_oauth, probe_allowed).await;
+            // A provider change during the network request invalidates its result and backoff.
+            if !app
+                .state::<crate::state::AppState>()
+                .0
+                .lock()
+                .unwrap()
+                .accepts_poll(provider, revision)
+            {
+                continue;
+            }
             if outcome.probed {
                 last_probe_ms = usage::now_ms();
             }
             if try_oauth {
                 if outcome.oauth_rate_limited {
                     rate_limited_polls += 1;
-                    let now = usage::now_ms();
-                    next_oauth_ms = now + backoff_ms(rate_limited_polls, now);
+                    next_oauth_ms =
+                        usage::now_ms() + backoff_ms(rate_limited_polls, usage::now_ms());
                 } else {
                     rate_limited_polls = 0;
                     next_oauth_ms = 0;
                 }
             }
-            let Some(mut snapshot) = outcome.snapshot else {
-                // Nothing was due this tick (usage endpoint backing off,
-                // probe not due) — sleep without touching the shown state.
-                if wait_or_refresh(&notify).await {
-                    next_oauth_ms = 0;
-                }
-                continue;
-            };
-            if snapshot.status == "ok" {
-                consecutive_failures = 0;
-            } else {
-                consecutive_failures += 1;
-                let showing_good_data = {
+            if let Some(mut snapshot) = outcome.snapshot {
+                let (published, recorded) = {
                     let state = app.state::<crate::state::AppState>();
-                    let s = state.0.lock().unwrap();
-                    s.last_usage.as_ref().is_some_and(|u| u.status == "ok")
-                };
-                if showing_good_data && consecutive_failures < ERROR_GRACE_POLLS {
-                    if wait_or_refresh(&notify).await {
-                        next_oauth_ms = 0;
+                    let mut s = state.0.lock().unwrap();
+                    if !s.accepts_poll(provider, revision) {
+                        continue;
                     }
-                    continue;
+                    let same_account = s
+                        .last_usage
+                        .as_ref()
+                        .filter(|p| p.scope == snapshot.scope && p.provider == snapshot.provider);
+                    if same_account.is_none() {
+                        consecutive_failures = 0;
+                    }
+                    if snapshot.status == "ok" {
+                        consecutive_failures = 0;
+                    } else {
+                        consecutive_failures += 1;
+                    }
+                    let hold_error = snapshot.status != "ok"
+                        && consecutive_failures < ERROR_GRACE_POLLS
+                        && same_account.is_some_and(|p| p.status == "ok")
+                        // Authentication errors should immediately give actionable guidance.
+                        && provider == crate::state::Provider::Claude;
+                    if hold_error {
+                        (false, false)
+                    } else {
+                        if let Some(previous) = same_account {
+                            retain_previous(&mut snapshot, previous);
+                        }
+                        s.last_usage = Some(snapshot.clone());
+                        let log = app.state::<crate::history::HistoryLog>();
+                        let recorded = crate::history::record(
+                            &mut log.0.lock().unwrap(),
+                            &snapshot,
+                            usage::now_ms(),
+                        );
+                        let _ = app.emit("usage://update", &snapshot);
+                        (true, recorded)
+                    }
+                };
+                if published {
+                    crate::state::save(&app);
+                    if recorded {
+                        crate::history::save(&app);
+                    }
+                    // Render the current state, in case a provider switch happened after publication.
+                    crate::tray::refresh(&app);
                 }
             }
-            {
-                let state = app.state::<crate::state::AppState>();
-                let mut s = state.0.lock().unwrap();
-                // The probe can only see two windows; keep the rest at their
-                // last known values rather than dropping their tiles.
-                if let Some(previous) = &s.last_usage {
-                    usage::carry_missing_windows(&mut snapshot, previous);
-                }
-                s.last_usage = Some(snapshot.clone());
-            }
-            crate::state::save(&app);
-            let recorded = {
-                let log = app.state::<crate::history::HistoryLog>();
-                let mut samples = log.0.lock().unwrap();
-                crate::history::record(&mut samples, &snapshot, usage::now_ms())
-            };
-            if recorded {
-                crate::history::save(&app);
-            }
-            let _ = app.emit("usage://update", &snapshot);
-            crate::tray::update(&app, &snapshot);
-
             if wait_or_refresh(&notify).await {
                 next_oauth_ms = 0;
             }
         }
     });
+}
+
+fn publish_availability(app: &AppHandle, provider: crate::state::Provider, available: bool) {
+    let updated = {
+        let state = app.state::<crate::state::AppState>();
+        let mut s = state.0.lock().unwrap();
+        s.available_providers.update(provider, available)
+            .then(|| (s.layout, s.effective_scale()))
+    };
+    if let Some((layout, scale)) = updated {
+        crate::commands::resize_main(app, layout, scale);
+        crate::tray::emit_state(app);
+    }
+}
+
+/// Stale values survive failures/restarts, but never cross account or provider boundaries.
+fn retain_previous(snapshot: &mut UsageSnapshot, previous: &UsageSnapshot) {
+    if snapshot.provider != previous.provider || snapshot.scope != previous.scope {
+        return;
+    }
+    if snapshot.status == "ok" {
+        usage::carry_missing_windows(snapshot, previous);
+    } else {
+        snapshot.windows = previous
+            .windows
+            .iter()
+            .cloned()
+            .map(|mut w| {
+                w.stale = true;
+                w
+            })
+            .collect();
+    }
 }
 
 /// Sleep one poll interval; returns true when woken early by a manual
@@ -260,6 +330,43 @@ async fn fetch_messages(client: &reqwest::Client, token: &str) -> Result<UsageSn
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failures_preserve_only_the_same_accounts_windows_and_never_record_them() {
+        let mut previous = UsageSnapshot::ok(
+            "codex-oauth",
+            vec![usage::LimitWindow {
+                id: usage::ID_SESSION.into(),
+                label: "5h".into(),
+                utilization: 21.0,
+                reset_at: Some(1789170838),
+                stale: false,
+                window_seconds: Some(18000),
+            }],
+        );
+        previous.provider = crate::state::Provider::Codex;
+        previous.scope = "codex:a".into();
+        let mut failed = crate::codex::error("expired".into(), Some("codex:a"));
+        retain_previous(&mut failed, &previous);
+        assert_eq!(failed.windows[0].utilization, 21.0);
+        assert!(failed.windows[0].stale);
+        assert!(!crate::history::record(
+            &mut Vec::new(),
+            &failed,
+            usage::now_ms()
+        ));
+        let restored: UsageSnapshot =
+            serde_json::from_str(&serde_json::to_string(&failed).unwrap()).unwrap();
+        let mut again = crate::codex::error("expired".into(), Some("codex:a"));
+        retain_previous(&mut again, &restored);
+        assert_eq!(again.windows.len(), 1);
+        let mut other = crate::codex::error("expired".into(), Some("codex:b"));
+        retain_previous(&mut other, &previous);
+        assert!(other.windows.is_empty());
+        let mut claude = UsageSnapshot::error("offline".into());
+        retain_previous(&mut claude, &previous);
+        assert!(claude.windows.is_empty());
+    }
 
     #[test]
     fn backoff_doubles_then_caps() {
