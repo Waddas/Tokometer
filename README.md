@@ -91,7 +91,7 @@ Hover over the widget to reveal its buttons. The grab handle is separated from t
 | Drag the bottom-right grip | Resize the widget |
 | Click a provider icon | Switch between Claude and Codex |
 | Click Pin | Keep the widget above other windows |
-| Click Refresh | Recheck local providers and retry usage immediately |
+| Click Refresh | Recheck local providers and retry usage (Codex respects server cooldowns) |
 | Click Settings | Adjust appearance, layout, limits, controls, and startup preferences |
 | Click Close | Hide the widget; restore it from the tray |
 | Hover over the graph | Inspect usage and time at the cursor |
@@ -117,6 +117,10 @@ The OAuth usage endpoint supplies usage and reset times. When it returns HTTP 42
 Tokometer reads `$CODEX_HOME/auth.json`, or `~/.codex/auth.json` by default, and queries OpenAI's internal usage endpoint directly. It does not launch the Codex CLI or an app-server, send model prompts, refresh tokens, or write to the credential file.
 
 API-key and other non-ChatGPT login modes are not supported for subscription usage tracking. If the login expires, refresh it through Codex and then click Refresh in Tokometer. This implementation follows the direct OAuth approach documented by [CodexBar](https://github.com/steipete/CodexBar/blob/1c4650d1b421bda3f0e495e8c14b69dc1b3de81d/docs/codex-oauth.md). The endpoint is internal and may change.
+
+Codex requests allow up to 30 seconds. Temporary connection failures, timeouts, and selected server errors receive one retry after two seconds. Rate limits use increasing cooldowns and honor the server's `Retry-After` header; Refresh and provider switching do not bypass an active account cooldown. Login errors appear immediately with guidance to reopen Codex.
+
+When a temporary failure occurs, the last reading stays faded with its age. The first two failed polls show a quiet “Updating…” message while the reading is under five minutes old; continued failures show the specific error. Stale readings are never added to usage history. Keep just one Tokometer instance running during normal use to avoid duplicate polling from development or preview builds.
 
 ### Local history
 

@@ -272,6 +272,9 @@ mod tests {
                 window_seconds: None,
             }],
             error: None,
+            last_success_at: None,
+            retry_at: None,
+            recovering: false,
         }
     }
 

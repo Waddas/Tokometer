@@ -46,10 +46,21 @@ pub fn spawn(app: AppHandle) {
         let mut rate_limited_polls: u32 = 0;
         let mut next_oauth_ms: i64 = 0;
         let mut last_revision = u64::MAX;
+        // Separate from Claude's schedule: manual refresh and provider switching
+        // must not bypass a Codex server cooldown for the same account.
+        let mut codex_cooldown: Option<(String, i64, u32)> = None;
         loop {
             // Provider visibility reflects local use, independent of API health.
-            publish_availability(&app, crate::state::Provider::Claude, crate::credentials::is_present());
-            publish_availability(&app, crate::state::Provider::Codex, crate::codex::is_present());
+            publish_availability(
+                &app,
+                crate::state::Provider::Claude,
+                crate::credentials::is_present(),
+            );
+            publish_availability(
+                &app,
+                crate::state::Provider::Codex,
+                crate::codex::is_present(),
+            );
             let (provider, revision, probe_enabled) = {
                 let state = app.state::<crate::state::AppState>();
                 let s = state.0.lock().unwrap();
@@ -69,17 +80,67 @@ pub fn spawn(app: AppHandle) {
                         probe_enabled && now - last_probe_ms >= PROBE_MIN_INTERVAL_MS;
                     poll_once(&client, try_oauth, probe_allowed).await
                 }
-                crate::state::Provider::Codex if try_oauth => {
-                    let (snapshot, limited) = crate::codex::poll(&client).await;
-                    PollOutcome::done(snapshot, false, limited)
+                crate::state::Provider::Codex => {
+                    let cooldown = codex_cooldown
+                        .as_ref()
+                        .map(|(scope, at, _)| (scope.as_str(), *at));
+                    match crate::codex::poll(&client, cooldown).await {
+                        Some(mut result) => {
+                            let count = codex_cooldown
+                                .as_ref()
+                                .filter(|(scope, _, _)| scope == &result.snapshot.scope)
+                                .map_or(0, |(_, _, count)| *count);
+                            if result.rate_limited {
+                                let count = count.saturating_add(1);
+                                let now = usage::now_ms();
+                                let deadline =
+                                    codex_retry_deadline(count, now, result.snapshot.retry_at);
+                                result.snapshot.retry_at = Some(deadline);
+                                codex_cooldown =
+                                    Some((result.snapshot.scope.clone(), deadline, count));
+                            } else if let Some(deadline) = result.snapshot.retry_at {
+                                codex_cooldown = Some((result.snapshot.scope.clone(), deadline, 0));
+                            } else if codex_cooldown
+                                .as_ref()
+                                .is_some_and(|(scope, _, _)| scope == &result.snapshot.scope)
+                            {
+                                codex_cooldown = None;
+                            }
+                            let mut outcome = PollOutcome::done(result.snapshot, false, false);
+                            outcome.transient = result.transient;
+                            outcome
+                        }
+                        None => {
+                            // Switching back clears last_usage. Show the pause instead of
+                            // leaving the widget stuck on "Loading" until the next request.
+                            let snapshot =
+                                codex_cooldown.as_ref().and_then(|(scope, deadline, _)| {
+                                    let state = app.state::<crate::state::AppState>();
+                                    let s = state.0.lock().unwrap();
+                                    if s.last_usage
+                                        .as_ref()
+                                        .is_some_and(|last| &last.scope == scope)
+                                    {
+                                        return None;
+                                    }
+                                    let mut paused = crate::codex::error(
+                                        "Codex usage paused — waiting before retrying".into(),
+                                        Some(scope),
+                                    );
+                                    paused.retry_at = Some(*deadline);
+                                    Some(paused)
+                                });
+                            PollOutcome {
+                                snapshot,
+                                probed: false,
+                                oauth_rate_limited: false,
+                                transient: false,
+                            }
+                        }
+                    }
                 }
-                crate::state::Provider::Codex => PollOutcome {
-                    snapshot: None,
-                    probed: false,
-                    oauth_rate_limited: false,
-                },
             };
-            // A provider change during the network request invalidates its result and backoff.
+            // A provider change invalidates the result; keep any account-specific Codex cooldown.
             if !app
                 .state::<crate::state::AppState>()
                 .0
@@ -92,7 +153,7 @@ pub fn spawn(app: AppHandle) {
             if outcome.probed {
                 last_probe_ms = usage::now_ms();
             }
-            if try_oauth {
+            if try_oauth && provider == crate::state::Provider::Claude {
                 if outcome.oauth_rate_limited {
                     rate_limited_polls += 1;
                     next_oauth_ms =
@@ -131,6 +192,8 @@ pub fn spawn(app: AppHandle) {
                     } else {
                         if let Some(previous) = same_account {
                             retain_previous(&mut snapshot, previous);
+                            snapshot.recovering =
+                                codex_grace(&snapshot, outcome.transient, consecutive_failures);
                         }
                         s.last_usage = Some(snapshot.clone());
                         let log = app.state::<crate::history::HistoryLog>();
@@ -163,7 +226,8 @@ fn publish_availability(app: &AppHandle, provider: crate::state::Provider, avail
     let updated = {
         let state = app.state::<crate::state::AppState>();
         let mut s = state.0.lock().unwrap();
-        s.available_providers.update(provider, available)
+        s.available_providers
+            .update(provider, available)
             .then(|| (s.layout, s.effective_scale()))
     };
     if let Some((layout, scale)) = updated {
@@ -180,6 +244,11 @@ fn retain_previous(snapshot: &mut UsageSnapshot, previous: &UsageSnapshot) {
     if snapshot.status == "ok" {
         usage::carry_missing_windows(snapshot, previous);
     } else {
+        snapshot.last_success_at = if previous.status == "ok" {
+            Some(previous.fetched_at)
+        } else {
+            previous.last_success_at
+        };
         snapshot.windows = previous
             .windows
             .iter()
@@ -192,8 +261,25 @@ fn retain_previous(snapshot: &mut UsageSnapshot, previous: &UsageSnapshot) {
     }
 }
 
+fn codex_retry_deadline(count: u32, now: i64, server: Option<i64>) -> i64 {
+    now.saturating_add(backoff_ms(count, now))
+        .max(server.unwrap_or(now))
+}
+
+fn codex_grace(snapshot: &UsageSnapshot, transient: bool, failures: u32) -> bool {
+    snapshot.provider == crate::state::Provider::Codex
+        && snapshot.status != "ok"
+        && transient
+        && snapshot.retry_at.is_none()
+        && failures < ERROR_GRACE_POLLS
+        && !snapshot.windows.is_empty()
+        && snapshot
+            .last_success_at
+            .is_some_and(|at| usage::now_ms().saturating_sub(at) < 5 * 60_000)
+}
+
 /// Sleep one poll interval; returns true when woken early by a manual
-/// refresh, which should retry the usage endpoint immediately.
+/// refresh. Codex still honors its account cooldown when woken early.
 async fn wait_or_refresh(notify: &Notify) -> bool {
     tokio::time::timeout(POLL_INTERVAL, notify.notified())
         .await
@@ -213,6 +299,7 @@ struct PollOutcome {
     probed: bool,
     /// Whether the usage endpoint answered HTTP 429, so the loop can back off.
     oauth_rate_limited: bool,
+    transient: bool,
 }
 
 impl PollOutcome {
@@ -221,6 +308,7 @@ impl PollOutcome {
             snapshot: Some(snapshot),
             probed,
             oauth_rate_limited,
+            transient: false,
         }
     }
 }
@@ -261,6 +349,7 @@ async fn poll_once(client: &reqwest::Client, try_oauth: bool, probe_allowed: boo
             snapshot: None,
             probed: false,
             oauth_rate_limited: false,
+            transient: false,
         };
     }
     // A 429 says nothing about the token, so don't surface expiry over it.
@@ -360,12 +449,49 @@ mod tests {
         let mut again = crate::codex::error("expired".into(), Some("codex:a"));
         retain_previous(&mut again, &restored);
         assert_eq!(again.windows.len(), 1);
+        assert_eq!(again.last_success_at, Some(previous.fetched_at));
+        assert_eq!(restored.last_success_at, Some(previous.fetched_at));
         let mut other = crate::codex::error("expired".into(), Some("codex:b"));
         retain_previous(&mut other, &previous);
         assert!(other.windows.is_empty());
+        assert!(other.last_success_at.is_none());
         let mut claude = UsageSnapshot::error("offline".into());
         retain_previous(&mut claude, &previous);
         assert!(claude.windows.is_empty());
+    }
+
+    #[test]
+    fn codex_grace_requires_recent_same_account_data_and_only_transient_failures() {
+        let mut snapshot = crate::codex::error("temporary".into(), Some("codex:a"));
+        snapshot.last_success_at = Some(usage::now_ms());
+        // No reading to display means errors must surface immediately.
+        assert!(!codex_grace(&snapshot, true, 1));
+        snapshot.windows.push(usage::LimitWindow {
+            id: usage::ID_SESSION.into(),
+            label: "5h".into(),
+            utilization: 21.0,
+            reset_at: None,
+            stale: true,
+            window_seconds: Some(18000),
+        });
+        assert!(codex_grace(&snapshot, true, 1));
+        assert!(codex_grace(&snapshot, true, 2));
+        assert!(!codex_grace(&snapshot, true, 3));
+        assert!(!codex_grace(&snapshot, false, 1)); // auth / malformed data
+        snapshot.retry_at = Some(usage::now_ms() + 60_000);
+        assert!(!codex_grace(&snapshot, true, 1)); // server-requested pause
+        snapshot.retry_at = None;
+        snapshot.last_success_at = Some(usage::now_ms() - 5 * 60_000);
+        assert!(!codex_grace(&snapshot, true, 1));
+        snapshot.last_success_at = None; // old saved error has no known age
+        assert!(!codex_grace(&snapshot, true, 1));
+    }
+
+    #[test]
+    fn codex_backoff_never_shortens_a_server_requested_pause() {
+        assert_eq!(codex_retry_deadline(1, 30_000, Some(900_000)), 900_000);
+        assert_eq!(codex_retry_deadline(1, 30_000, Some(31_000)), 150_000);
+        assert_eq!(codex_retry_deadline(1, 30_000, None), 150_000);
     }
 
     #[test]
