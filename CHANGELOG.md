@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0](https://github.com/Waddas/Tokometer/compare/v1.5.0...v1.6.0) (2026-09-12)
+
+
+### Features
+
+* add Codex usage tracking and configurable widget controls ([#29](https://github.com/Waddas/Tokometer/issues/29)) ([d2d5503](https://github.com/Waddas/Tokometer/commit/d2d5503c8189369b1a7dbce6c4b28a12146a5cec))
+* polish app appearance with themes and layout previews ([#27](https://github.com/Waddas/Tokometer/issues/27)) ([f87cca7](https://github.com/Waddas/Tokometer/commit/f87cca727da62b0ee26ac8676666c59614f0f42f))
+
+
+### Bug Fixes
+
+* improve Codex usage polling reliability ([#30](https://github.com/Waddas/Tokometer/issues/30)) ([85516c4](https://github.com/Waddas/Tokometer/commit/85516c4197528b9a838e81c942c6ac22574103b7))
+
 ## [1.5.0](https://github.com/Waddas/Tokometer/compare/v1.4.0...v1.5.0) (2026-09-03)
 
 
