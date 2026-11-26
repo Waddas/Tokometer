@@ -1,0 +1,13 @@
+{
+  "name": "tokometer",
+  "owner": {
+    "name": "Bradley Wadsworth"
+  },
+  "plugins": [
+    {
+      "name": "tokometer",
+      "source": "./plugin",
+      "description": "Lets Claude Code sessions see Claude usage limits from the Tokometer desktop app"
+    }
+  ]
+}

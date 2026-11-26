@@ -5,6 +5,7 @@ mod credentials;
 mod history;
 mod poller;
 mod state;
+mod status_file;
 mod tray;
 mod trayicon;
 mod update;

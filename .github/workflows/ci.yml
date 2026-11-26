@@ -56,6 +56,15 @@ jobs:
 
       - run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      # Git Bash on Windows, which is what Claude Code runs the script with there.
+      - name: Plugin script tests
+        shell: bash
+        run: sh plugin/tests/test-usage.sh
+
+      - name: Plugin script tests (dash)
+        if: matrix.platform == 'ubuntu-latest'
+        run: TEST_SH=dash sh plugin/tests/test-usage.sh
+
   # Launches the real app and drives it over the WebView2 devtools protocol:
   # opens the settings window from the widget's button and asserts the app
   # stays responsive. Windows-only — it's the platform where webview creation

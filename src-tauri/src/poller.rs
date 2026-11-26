@@ -164,7 +164,7 @@ pub fn spawn(app: AppHandle) {
                 }
             }
             if let Some(mut snapshot) = outcome.snapshot {
-                let (published, recorded) = {
+                let (status, recorded) = {
                     let state = app.state::<crate::state::AppState>();
                     let mut s = state.0.lock().unwrap();
                     if !s.accepts_poll(provider, revision) {
@@ -188,7 +188,7 @@ pub fn spawn(app: AppHandle) {
                         // Authentication errors should immediately give actionable guidance.
                         && provider == crate::state::Provider::Claude;
                     if hold_error {
-                        (false, false)
+                        (None, false)
                     } else {
                         if let Some(previous) = same_account {
                             retain_previous(&mut snapshot, previous);
@@ -197,17 +197,17 @@ pub fn spawn(app: AppHandle) {
                         }
                         s.last_usage = Some(snapshot.clone());
                         let log = app.state::<crate::history::HistoryLog>();
-                        let recorded = crate::history::record(
-                            &mut log.0.lock().unwrap(),
-                            &snapshot,
-                            usage::now_ms(),
-                        );
+                        let mut samples = log.0.lock().unwrap();
+                        let now = usage::now_ms();
+                        let recorded = crate::history::record(&mut samples, &snapshot, now);
+                        let status = crate::status_file::build(&snapshot, &samples, now);
                         let _ = app.emit("usage://update", &snapshot);
-                        (true, recorded)
+                        (Some(status), recorded)
                     }
                 };
-                if published {
+                if let Some(status) = status {
                     crate::state::save(&app);
+                    crate::status_file::write(&app, &status);
                     if recorded {
                         crate::history::save(&app);
                     }
