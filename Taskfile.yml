@@ -81,10 +81,11 @@ tasks:
       - npm run build
 
   test:
-    desc: Run the whole test suite (frontend + Rust)
+    desc: Run the whole test suite (frontend + Rust + plugin)
     deps:
       - test:web
       - test:rust
+      - test:plugin
 
   test:web:
     desc: Run the frontend (Vitest) unit tests
@@ -100,6 +101,11 @@ tasks:
     desc: Run the Rust (cargo) unit tests
     cmds:
       - cargo test --manifest-path {{.CARGO_MANIFEST}}
+
+  test:plugin:
+    desc: Run the Claude Code plugin's usage script tests
+    cmds:
+      - sh plugin/tests/test-usage.sh
 
   test:e2e:
     desc: Build a debug app and drive it end-to-end over CDP (Windows only)

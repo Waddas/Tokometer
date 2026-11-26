@@ -1,0 +1,10 @@
+{
+  "name": "tokometer",
+  "description": "Lets Claude Code sessions see Claude usage limits from the Tokometer desktop app",
+  "version": "1.6.0",
+  "author": {
+    "name": "Bradley Wadsworth"
+  },
+  "homepage": "https://github.com/Waddas/Tokometer",
+  "license": "GPL-3.0-or-later"
+}

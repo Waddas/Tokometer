@@ -100,6 +100,19 @@ Hover over the widget to reveal its buttons. The grab handle is separated from t
 
 Usage tiles and the graph have no native hover tooltips. The graph retains its own cursor readout. The display also supports optional animated mascots; click it to switch between animation and graph, or right-click the animation to choose another character.
 
+## Claude Code sessions
+
+Claude Code sessions can read your current usage from Tokometer, so they can check there's room before starting a large piece of work. Install the plugin from this repository:
+
+```text
+/plugin marketplace add Waddas/Tokometer
+/plugin install tokometer@tokometer
+```
+
+The plugin adds a `usage` skill. Sessions use it when you ask about usage, before starting something large such as a fan-out of subagents, or whenever your `CLAUDE.md` asks them to watch usage. It reports each limit's percentage and reset time, whether the current pace runs out before the reset, and a level: warn at 80%, or from 50% when on pace to run out, critical at 95%. The forecast is a straight line from recent usage and does not skip days left out of your work days. Nothing is sent to a session unless it asks, so usage never interrupts or distracts a session's work.
+
+Tokometer writes `usage-status.json` next to its settings after every poll. The plugin ignores readings older than 20 minutes or for Codex, and needs nothing beyond the shell Claude Code already uses. Set `TOKOMETER_USAGE_FILE` to point it at a different file.
+
 ## Data and privacy
 
 Tokometer reads existing credentials and sends usage requests directly to the selected provider. It does not require a separate Tokometer account or a hosted backend. Settings and usage history are stored locally.
